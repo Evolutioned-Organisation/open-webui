@@ -190,7 +190,7 @@
 									list="model-list"
 									class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-none"
 									bind:value={STT_MODEL}
-									placeholder="Select a model"
+									placeholder="select a project"
 								/>
 
 								<datalist id="model-list">
@@ -331,7 +331,7 @@
 										list="tts-model-list"
 										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-none"
 										bind:value={TTS_MODEL}
-										placeholder="Select a model"
+										placeholder="select a project"
 									/>
 
 									<datalist id="tts-model-list">
@@ -372,7 +372,7 @@
 										list="tts-model-list"
 										class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-none"
 										bind:value={TTS_MODEL}
-										placeholder="Select a model"
+										placeholder="select a project"
 									/>
 
 									<datalist id="tts-model-list">

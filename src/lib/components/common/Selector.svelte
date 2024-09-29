@@ -11,7 +11,7 @@
 	const dispatch = createEventDispatcher();
 
 	export let value = '';
-	export let placeholder = 'Select a model';
+	export let placeholder = 'select a project';
 	export let searchEnabled = true;
 	export let searchPlaceholder = 'Search a model';
 

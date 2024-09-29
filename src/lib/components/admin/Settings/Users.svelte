@@ -198,9 +198,9 @@
 						<select
 							class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-none"
 							bind:value={defaultModelId}
-							placeholder="Select a model"
+							placeholder="Select a project"
 						>
-							<option value="" disabled selected>{$i18n.t('Select a model')}</option>
+							<option value="" disabled selected>{$i18n.t('select a project')}</option>
 							{#each $models.filter((model) => model.id) as model}
 								<option value={model.id} class="bg-gray-100 dark:bg-gray-700">{model.name}</option>
 							{/each}
@@ -226,9 +226,9 @@
 											<select
 												class="w-full rounded-lg py-2 px-4 text-sm bg-gray-50 dark:text-gray-300 dark:bg-gray-850 outline-none"
 												bind:value={modelId}
-												placeholder="Select a model"
+												placeholder="select a project"
 											>
-												<option value="" disabled selected>{$i18n.t('Select a model')}</option>
+												<option value="" disabled selected>{$i18n.t('select a project')}</option>
 												{#each $models.filter((model) => model.id) as model}
 													<option value={model.id} class="bg-gray-100 dark:bg-gray-700"
 														>{model.name}</option

@@ -17,16 +17,16 @@ describe('Settings', () => {
 	});
 
 	context('Ollama', () => {
-		it('user can select a model', () => {
+		it('user can select a project', () => {
 			// Click on the model selector
-			cy.get('button[aria-label="Select a model"]').click();
+			cy.get('button[aria-label="select a project"]').click();
 			// Select the first model
 			cy.get('button[aria-label="model-item"]').first().click();
 		});
 
 		it('user can perform text chat', () => {
 			// Click on the model selector
-			cy.get('button[aria-label="Select a model"]').click();
+			cy.get('button[aria-label="select a project"]').click();
 			// Select the first model
 			cy.get('button[aria-label="model-item"]').first().click();
 			// Type a message
@@ -46,7 +46,7 @@ describe('Settings', () => {
 
 		it('user can share chat', () => {
 			// Click on the model selector
-			cy.get('button[aria-label="Select a model"]').click();
+			cy.get('button[aria-label="select a project"]').click();
 			// Select the first model
 			cy.get('button[aria-label="model-item"]').first().click();
 			// Type a message
@@ -81,7 +81,7 @@ describe('Settings', () => {
 
 		it('user can generate image', () => {
 			// Click on the model selector
-			cy.get('button[aria-label="Select a model"]').click();
+			cy.get('button[aria-label="select a project"]').click();
 			// Select the first model
 			cy.get('button[aria-label="model-item"]').first().click();
 			// Type a message
