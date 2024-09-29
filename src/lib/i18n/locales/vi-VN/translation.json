@@ -550,7 +550,7 @@
 	"Scan for documents from {{path}}": "Quét tài liệu từ đường dẫn: {{path}}",
 	"Scroll to bottom when switching between branches": "Cuộn xuống dưới cùng khi chuyển đổi giữa các nhánh",
 	"Search": "Tìm kiếm",
-	"Search a model": "Tìm model",
+	"select a project": "Tìm model",
 	"Search Chats": "Tìm kiếm các cuộc Chat",
 	"Search Documents": "Tìm tài liệu",
 	"Search Functions": "Tìm kiếm Functions",

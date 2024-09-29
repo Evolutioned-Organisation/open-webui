@@ -550,7 +550,7 @@
 	"Scan for documents from {{path}}": "დოკუმენტების სკანირება {{ path}}-დან",
 	"Scroll to bottom when switching between branches": "",
 	"Search": "ძიება",
-	"Search a model": "მოდელის ძიება",
+	"select a project": "მოდელის ძიება",
 	"Search Chats": "ჩატების ძებნა",
 	"Search Documents": "დოკუმენტების ძიება",
 	"Search Functions": "",

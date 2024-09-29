@@ -550,7 +550,7 @@
 	"Scan for documents from {{path}}": "{{path}} 에서 문서 스캔",
 	"Scroll to bottom when switching between branches": "",
 	"Search": "검색",
-	"Search a model": "모델 검색",
+	"select a project": "모델 검색",
 	"Search Chats": "채팅 검색",
 	"Search Documents": "문서 검색",
 	"Search Functions": "",

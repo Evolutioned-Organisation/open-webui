@@ -13,7 +13,7 @@
 	export let value = '';
 	export let placeholder = 'select a project';
 	export let searchEnabled = true;
-	export let searchPlaceholder = 'Search a model';
+	export let searchPlaceholder = 'select a project';
 
 	export let items = [
 		{ value: 'mango', label: 'Mango' },

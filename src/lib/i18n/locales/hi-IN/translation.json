@@ -550,7 +550,7 @@
 	"Scan for documents from {{path}}": "{{path}} से दस्तावेज़ों को स्कैन करें",
 	"Scroll to bottom when switching between branches": "",
 	"Search": "खोजें",
-	"Search a model": "एक मॉडल खोजें",
+	"select a project": "एक मॉडल खोजें",
 	"Search Chats": "चैट खोजें",
 	"Search Documents": "दस्तावेज़ खोजें",
 	"Search Functions": "",

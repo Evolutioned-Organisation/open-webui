@@ -550,7 +550,7 @@
 	"Scan for documents from {{path}}": "{{path}} مسح على الملفات من",
 	"Scroll to bottom when switching between branches": "",
 	"Search": "البحث",
-	"Search a model": "البحث عن موديل",
+	"select a project": "البحث عن موديل",
 	"Search Chats": "البحث في الدردشات",
 	"Search Documents": "البحث المستندات",
 	"Search Functions": "",

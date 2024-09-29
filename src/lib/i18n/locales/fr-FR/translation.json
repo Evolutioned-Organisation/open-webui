@@ -550,7 +550,7 @@
 	"Scan for documents from {{path}}": "Scanner des documents depuis {{path}}",
 	"Scroll to bottom when switching between branches": "Défiler vers le bas lors du passage d'une branche à l'autre",
 	"Search": "Recherche",
-	"Search a model": "Rechercher un modèle",
+	"select a project": "Rechercher un modèle",
 	"Search Chats": "Rechercher des conversations",
 	"Search Documents": "Rechercher des documents",
 	"Search Functions": "Rechercher des fonctions",

@@ -550,7 +550,7 @@
 	"Scan for documents from {{path}}": "Сканирование документов из {{path}}",
 	"Scroll to bottom when switching between branches": "Прокручивать вниз при переключении веток",
 	"Search": "Поиск",
-	"Search a model": "Поиск модели",
+	"select a project": "Поиск модели",
 	"Search Chats": "Поиск в чатах",
 	"Search Documents": "Поиск документов",
 	"Search Functions": "Поиск функций",

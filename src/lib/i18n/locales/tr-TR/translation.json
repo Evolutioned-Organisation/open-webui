@@ -550,7 +550,7 @@
 	"Scan for documents from {{path}}": "{{path}} dizininden belgeleri tarayın",
 	"Scroll to bottom when switching between branches": "Dallar arasında geçiş yaparken en alta kaydır",
 	"Search": "Ara",
-	"Search a model": "Bir model ara",
+	"select a project": "Bir model ara",
 	"Search Chats": "Sohbetleri Ara",
 	"Search Documents": "Belgeleri Ara",
 	"Search Functions": "Fonksiyonları Ara",
