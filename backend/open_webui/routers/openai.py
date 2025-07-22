@@ -44,6 +44,9 @@ from open_webui.utils.misc import (
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_access
+from open_webui.socket.main import (
+    get_event_emitter,
+)
 
 
 log = logging.getLogger(__name__)
@@ -717,6 +720,8 @@ async def generate_chat_completion(
     payload = {**form_data}
     metadata = payload.pop("metadata", None)
 
+    __event_emitter__ = get_event_emitter(metadata)
+
     model_id = form_data.get("model")
     model_info = Models.get_model_by_id(model_id)
 
@@ -866,14 +871,130 @@ async def generate_chat_completion(
         # Check if response is SSE
         if "text/event-stream" in r.headers.get("Content-Type", ""):
             streaming = True
-            return StreamingResponse(
-                r.content,
-                status_code=r.status,
-                headers=dict(r.headers),
-                background=BackgroundTask(
-                    cleanup_response, response=r, session=session
-                ),
-            )
+
+            if "pipeline" in model and model.get("pipeline"):
+                # Read each event from the stream and parse event
+                async def stream_events():
+                    async for line in r.content:
+                        if line:
+                            log.info(line)
+                            if line.startswith(b"data: "):
+                                data_str = line[6:].strip()
+                                try:
+                                    data = json.loads(data_str.decode("utf-8"))
+                                    if (
+                                        isinstance(data, dict)
+                                        and "choices" in data
+                                        and isinstance(data["choices"], list)
+                                        and len(data["choices"]) > 0
+                                    ):
+                                        choice = data["choices"][0]
+                                        if (
+                                            isinstance(choice, dict)
+                                            and "delta" in choice
+                                            and isinstance(choice["delta"], dict)
+                                            and "status" in choice["delta"]
+                                        ):
+                                            status_content = choice["delta"]["status"]
+                                            log.error(
+                                                f"status_content: {status_content}"
+                                            )
+                                            await __event_emitter__(
+                                                {
+                                                    "type": "status",  # We set the type here
+                                                    "data": {
+                                                        "description": status_content,
+                                                        "done": False,
+                                                        "hidden": False,
+                                                    },
+                                                    # Note done is False here indicating we are still emitting statuses
+                                                }
+                                            )
+                                            continue  # Skip yielding the original data line
+                                        elif (
+                                            isinstance(choice, dict)
+                                            and "delta" in choice
+                                            and isinstance(choice["delta"], dict)
+                                            and "content" in choice["delta"]
+                                            and choice["delta"]["content"]
+                                        ):
+                                            content = choice["delta"]["content"]
+                                            
+                                            # Skip [DONE] markers - don't display them
+                                            if content == "[DONE]":
+                                                continue
+                                            
+                                            # Check if content contains status messages
+                                            if content.startswith("Status: "):
+                                                # Extract status messages from content
+                                                status_parts = content.split("Status: ")
+                                                for i, part in enumerate(status_parts[1:], 1):  # Skip first empty part
+                                                    if part.strip():
+                                                        # Clean up the status message
+                                                        status_msg = part.strip()
+                                                        # Remove INFO: prefix if present
+                                                        if status_msg.startswith("INFO: "):
+                                                            status_msg = status_msg[6:]  # Remove "INFO: " prefix
+                                                        elif status_msg.startswith("WARNING: "):
+                                                            status_msg = status_msg[9:]  # Remove "WARNING: " prefix
+                                                        elif status_msg.startswith("ERROR: "):
+                                                            status_msg = status_msg[7:]  # Remove "ERROR: " prefix
+                                                        # Remove trailing content if it exists
+                                                        if "..." in status_msg:
+                                                            status_msg = status_msg.split("...")[0] + "..."
+                                                        
+                                                        await __event_emitter__(
+                                                            {
+                                                                "type": "status",
+                                                                "data": {
+                                                                    "description": status_msg,
+                                                                    "done": False,
+                                                                    "hidden": False,
+                                                                },
+                                                            }
+                                                        )
+                                                
+                                                # Don't yield the status content to the chat
+                                                continue
+                                            else:
+                                                # Regular content, yield it normally
+                                                yield line
+                                        else:
+                                            await __event_emitter__(
+                                                {
+                                                    "type": "status",  # We set the type here
+                                                    "data": {
+                                                        "description": "Finished",
+                                                        "done": True,
+                                                        "hidden": False,
+                                                    },
+                                                    # Note done is False here indicating we are still emitting statuses
+                                                }
+                                            )
+                                            yield line
+
+                                except json.JSONDecodeError:
+                                    yield line
+                            else:
+                                yield line
+
+                return StreamingResponse(
+                    stream_events(),
+                    status_code=r.status,
+                    headers=dict(r.headers),
+                    background=BackgroundTask(
+                        cleanup_response, response=r, session=session
+                    ),
+                )
+            else:
+                return StreamingResponse(
+                    r.content,
+                    status_code=r.status,
+                    headers=dict(r.headers),
+                    background=BackgroundTask(
+                        cleanup_response, response=r, session=session
+                    ),
+                )
         else:
             try:
                 response = await r.json()
