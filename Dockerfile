@@ -30,10 +30,13 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 COPY package.json package-lock.json ./
+# Increase Node.js memory limit to prevent heap out of memory
+ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN npm ci --force
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
+# Keep increased memory limit for build step
 RUN npm run build
 
 ######## WebUI backend ########
