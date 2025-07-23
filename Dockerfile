@@ -67,7 +67,7 @@ ENV OLLAMA_BASE_URL="/ollama" \
 
 ## API Key and Security Config ##
 ENV OPENAI_API_KEY="" \
-    WEBUI_SECRET_KEY="" \
+    WEBUI_SECRET_KEY="t0p-s3cr3t" \
     SCARF_NO_ANALYTICS=true \
     DO_NOT_TRACK=true \
     ANONYMIZED_TELEMETRY=false
@@ -168,6 +168,14 @@ COPY --chown=$UID:$GID --from=build /app/package.json /app/package.json
 
 # copy backend files
 COPY --chown=$UID:$GID ./backend .
+
+# Copy the AIMBY tool installation script for runtime use
+# NOTE: Tool installation script is available for on-demand installation via admin interface
+COPY --chown=$UID:$GID ./install_aimby_tool.py /app/install_aimby_tool.py
+COPY --chown=$UID:$GID ./verify_aimby_tool.py /app/verify_aimby_tool.py
+
+# Make scripts executable
+RUN chmod +x /app/install_aimby_tool.py /app/verify_aimby_tool.py
 
 EXPOSE 8080
 

@@ -133,3 +133,93 @@ async def download_litellm_config_yaml(user=Depends(get_admin_user)):
         media_type="application/octet-stream",
         filename="config.yaml",
     )
+
+
+@router.post("/admin/install-aimby-tool")
+async def install_aimby_tool(user=Depends(get_admin_user)):
+    """Install the AIMBY sync tool into the database"""
+    try:
+        import subprocess
+        import sys
+        import os
+        
+        # Set up environment for the installation script
+        env = os.environ.copy()
+        env['WEBUI_SECRET_KEY'] = 't0p-s3cr3t'
+        env['PYTHONPATH'] = '/app/backend'
+        
+        # Execute the installation script
+        result = subprocess.run(
+            [sys.executable, '/app/install_aimby_tool.py'],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd='/app'
+        )
+        
+        if result.returncode == 0:
+            return {
+                "success": True,
+                "message": "AIMBY tool installed successfully!",
+                "output": result.stdout
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"Tool installation failed: {result.stderr}",
+                "error": result.stderr,
+                "output": result.stdout
+            }
+            
+    except Exception as e:
+        log.error(f"Error installing AIMBY tool: {e}")
+        return {
+            "success": False,
+            "message": f"Tool installation error: {str(e)}",
+            "error": str(e)
+        }
+
+
+@router.post("/admin/verify-aimby-tool")
+async def verify_aimby_tool(user=Depends(get_admin_user)):
+    """Verify that the AIMBY tool is properly installed"""
+    try:
+        import subprocess
+        import sys
+        import os
+        
+        # Set up environment for the verification script
+        env = os.environ.copy()
+        env['WEBUI_SECRET_KEY'] = 't0p-s3cr3t'
+        env['PYTHONPATH'] = '/app/backend'
+        
+        # Execute the verification script
+        result = subprocess.run(
+            [sys.executable, '/app/verify_aimby_tool.py'],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd='/app'
+        )
+        
+        if result.returncode == 0:
+            return {
+                "success": True,
+                "message": "AIMBY tool verification successful!",
+                "output": result.stdout
+            }
+        else:
+            return {
+                "success": False,
+                "message": f"Tool verification failed: {result.stderr}",
+                "error": result.stderr,
+                "output": result.stdout
+            }
+            
+    except Exception as e:
+        log.error(f"Error verifying AIMBY tool: {e}")
+        return {
+            "success": False,
+            "message": f"Tool verification error: {str(e)}",
+            "error": str(e)
+        }
