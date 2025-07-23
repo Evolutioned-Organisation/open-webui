@@ -2,6 +2,7 @@
 	import { onMount, getContext, createEventDispatcher } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
+	import { WEBUI_BASE_URL } from '$lib/constants';
 
 	const dispatch = createEventDispatcher();
 	const i18n = getContext('i18n');
@@ -42,7 +43,7 @@
 	const detectEnvironment = async () => {
 		try {
 			// Try to detect if we're in a container environment
-			const response = await fetch('/api/config');
+			const response = await fetch(`${WEBUI_BASE_URL}/api/config`);
 			if (response.ok) {
 				const config = await response.json();
 				// Check for container-specific indicators
@@ -124,7 +125,7 @@
 
 		try {
 			// Call the AIMBY sync tool through the tools API
-			const response = await fetch('/api/v1/tools/execute', {
+			const response = await fetch(`${WEBUI_BASE_URL}/api/v1/tools/execute`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -202,7 +203,7 @@
 
 	const getWorkflowStatus = async () => {
 		try {
-			const response = await fetch('/api/v1/tools/execute', {
+			const response = await fetch(`${WEBUI_BASE_URL}/api/v1/tools/execute`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
@@ -221,7 +222,7 @@
 
 			if (response.ok) {
 				const result = await response.json();
-				
+
 				// Check if the tool execution was successful
 				if (result.success && result.result) {
 					// Check if the result contains error information from the tool
@@ -352,14 +353,6 @@
 						></span>
 					{/if}
 					{$i18n.t('Sync Workflows')}
-				</button>
-
-				<button
-					type="button"
-					class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
-					on:click={getWorkflowStatus}
-				>
-					{$i18n.t('Get Status')}
 				</button>
 
 				<button
