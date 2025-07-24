@@ -169,13 +169,16 @@ COPY --chown=$UID:$GID --from=build /app/package.json /app/package.json
 # copy backend files
 COPY --chown=$UID:$GID ./backend .
 
-# Copy the AIMBY tool installation script for runtime use
-# NOTE: Tool installation script is available for on-demand installation via admin interface
+# Copy the AIMBY tool installation script
 COPY --chown=$UID:$GID ./install_aimby_tool.py /app/install_aimby_tool.py
-COPY --chown=$UID:$GID ./verify_aimby_tool.py /app/verify_aimby_tool.py
 
-# Make scripts executable
-RUN chmod +x /app/install_aimby_tool.py /app/verify_aimby_tool.py
+# Install AIMBY sync tool during build
+ENV WEBUI_SECRET_KEY="t0p-s3cr3t" \
+    PYTHONPATH="/app/backend"
+RUN cd /app && python install_aimby_tool.py
+
+# Clean up the installation script
+RUN rm -f /app/install_aimby_tool.py
 
 EXPOSE 8080
 

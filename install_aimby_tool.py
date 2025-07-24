@@ -590,12 +590,7 @@ class Tools:
         return False
 
 if __name__ == "__main__":
-    print("🔧 Starting AIMBY tool installation...")
     success = install_aimby_tool()
     if not success:
         logger.error("❌ AIMBY tool installation failed!")
-        print("❌ BUILD FAILED: AIMBY tool installation unsuccessful")
-        sys.exit(1)
-    else:
-        print("✅ AIMBY tool installation completed successfully!")
-        print("✅ BUILD SUCCESS: Tool ready for verification") 
+        sys.exit(1) 
