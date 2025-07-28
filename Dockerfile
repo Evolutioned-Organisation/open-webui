@@ -19,6 +19,8 @@ ARG BUILD_HASH=dev-build
 # Override at your own risk - non-root configurations are untested
 ARG UID=0
 ARG GID=0
+# API key for pipeline authentication
+ARG OPENAI_API_KEY=""
 
 ######## WebUI frontend ########
 FROM --platform=$BUILDPLATFORM node:22-alpine3.20 AS build
@@ -66,7 +68,7 @@ ENV OLLAMA_BASE_URL="/ollama" \
     OPENAI_API_BASE_URL=""
 
 ## API Key and Security Config ##
-ENV OPENAI_API_KEY="" \
+ENV OPENAI_API_KEY="${OPENAI_API_KEY}" \
     WEBUI_SECRET_KEY="t0p-s3cr3t" \
     SCARF_NO_ANALYTICS=true \
     DO_NOT_TRACK=true \
