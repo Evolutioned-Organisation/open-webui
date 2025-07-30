@@ -174,6 +174,8 @@ class ChatTable:
         try:
             with get_db() as db:
                 chat_item = db.get(Chat, id)
+                if chat_item is None:
+                    return None
                 chat_item.chat = chat
                 chat_item.title = chat["title"] if "title" in chat else "New Chat"
                 chat_item.updated_at = int(time.time())
@@ -352,6 +354,8 @@ class ChatTable:
         try:
             with get_db() as db:
                 chat = db.get(Chat, id)
+                if chat is None:
+                    return None
                 chat.share_id = share_id
                 db.commit()
                 db.refresh(chat)
@@ -363,6 +367,8 @@ class ChatTable:
         try:
             with get_db() as db:
                 chat = db.get(Chat, id)
+                if chat is None:
+                    return None
                 chat.pinned = not chat.pinned
                 chat.updated_at = int(time.time())
                 db.commit()
@@ -375,6 +381,8 @@ class ChatTable:
         try:
             with get_db() as db:
                 chat = db.get(Chat, id)
+                if chat is None:
+                    return None
                 chat.archived = not chat.archived
                 chat.updated_at = int(time.time())
                 db.commit()
