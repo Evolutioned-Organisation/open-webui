@@ -167,7 +167,7 @@
 		if (chatIdProp && (await loadChat())) {
 			await tick();
 			loading = false;
-			window.setTimeout(() => scrollToBottom(), 0);
+			window.setTimeout(() => scrollToTop(), 0);
 
 			await tick();
 
@@ -971,6 +971,16 @@
 		if (messagesContainerElement) {
 			messagesContainerElement.scrollTo({
 				top: messagesContainerElement.scrollHeight,
+				behavior
+			});
+		}
+	};
+
+	const scrollToTop = async (behavior = 'auto') => {
+		await tick();
+		if (messagesContainerElement) {
+			messagesContainerElement.scrollTo({
+				top: 0,
 				behavior
 			});
 		}
