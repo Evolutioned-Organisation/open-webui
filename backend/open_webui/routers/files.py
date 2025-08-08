@@ -2,6 +2,7 @@ import logging
 import os
 import uuid
 import json
+import requests
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Optional
@@ -44,6 +45,42 @@ log.setLevel(SRC_LOG_LEVELS["MODELS"])
 
 
 router = APIRouter()
+
+
+############################
+# External Document Loader Cleanup
+############################
+
+
+async def cleanup_external_document_loader(file_id: str, filename: str, request: Request):
+    """Call external document loader service to clean up processed files"""
+    try:
+        external_url = request.app.state.config.EXTERNAL_DOCUMENT_LOADER_URL
+        api_key = request.app.state.config.EXTERNAL_DOCUMENT_LOADER_API_KEY
+        content_extraction_engine = request.app.state.config.CONTENT_EXTRACTION_ENGINE
+        
+        # Only call external cleanup if external document loader is configured and enabled
+        if not external_url or not api_key or content_extraction_engine != "external":
+            log.debug("External document loader not configured or not enabled, skipping cleanup")
+            return
+        
+        # Remove trailing slash if present
+        if external_url.endswith("/"):
+            external_url = external_url[:-1]
+        
+        headers = {"Authorization": f"Bearer {api_key}"}
+        data = {"file_id": file_id, "filename": filename}
+        
+        log.info(f"Calling external document loader cleanup for file {file_id}")
+        response = requests.delete(f"{external_url}/cleanup", json=data, headers=headers, timeout=10)
+        
+        if response.ok:
+            log.info(f"External document loader cleanup successful for file {file_id}")
+        else:
+            log.warning(f"External document loader cleanup failed for file {file_id}: {response.status_code} {response.text}")
+            
+    except Exception as e:
+        log.warning(f"External document loader cleanup error for file {file_id}: {e}")
 
 
 ############################
@@ -591,7 +628,7 @@ async def get_file_content_by_id(id: str, user=Depends(get_verified_user)):
 
 
 @router.delete("/{id}")
-async def delete_file_by_id(id: str, user=Depends(get_verified_user)):
+async def delete_file_by_id(id: str, request: Request, user=Depends(get_verified_user)):
     file = Files.get_file_by_id(id)
 
     if not file:
@@ -611,6 +648,14 @@ async def delete_file_by_id(id: str, user=Depends(get_verified_user)):
             try:
                 Storage.delete_file(file.path)
                 VECTOR_DB_CLIENT.delete(collection_name=f"file-{id}")
+                
+                # Call external document loader cleanup (non-blocking)
+                try:
+                    await cleanup_external_document_loader(id, file.filename, request)
+                except Exception as cleanup_error:
+                    log.warning(f"External cleanup failed for file {id}: {cleanup_error}")
+                    # Don't fail the delete operation if external cleanup fails
+                    
             except Exception as e:
                 log.exception(e)
                 log.error("Error deleting files")
