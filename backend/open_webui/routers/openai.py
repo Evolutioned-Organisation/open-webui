@@ -8,6 +8,7 @@ import aiohttp
 from aiocache import cached
 import requests
 from urllib.parse import quote
+import time
 
 from fastapi import Depends, HTTPException, Request, APIRouter
 from fastapi.responses import (
@@ -63,32 +64,69 @@ log.setLevel(SRC_LOG_LEVELS["OPENAI"])
 ##########################################
 
 
-async def send_get_request(url, key=None, user: UserModel = None):
+async def send_get_request(url, key=None, user: Optional[UserModel] = None, max_retries=2):
     timeout = aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST)
-    try:
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
-            async with session.get(
-                url,
-                headers={
-                    **({"Authorization": f"Bearer {key}"} if key else {}),
-                    **(
-                        {
-                            "X-OpenWebUI-User-Name": quote(user.name, safe=" "),
-                            "X-OpenWebUI-User-Id": user.id,
-                            "X-OpenWebUI-User-Email": user.email,
-                            "X-OpenWebUI-User-Role": user.role,
-                        }
-                        if ENABLE_FORWARD_USER_INFO_HEADERS and user
-                        else {}
+    
+    for attempt in range(max_retries + 1):
+        try:
+            async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+                async with session.get(
+                    url,
+                    headers=dict(
+                        **({"Authorization": f"Bearer {key}"} if key else {}),
+                        **(
+                            {
+                                "X-OpenWebUI-User-Name": quote(user.name, safe=" "),
+                                "X-OpenWebUI-User-Id": user.id,
+                                "X-OpenWebUI-User-Email": user.email,
+                                "X-OpenWebUI-User-Role": user.role,
+                            }
+                            if ENABLE_FORWARD_USER_INFO_HEADERS and user is not None
+                            else {}
+                        ),
                     ),
-                },
-                ssl=AIOHTTP_CLIENT_SESSION_SSL,
-            ) as response:
-                return await response.json()
-    except Exception as e:
-        # Handle connection error here
-        log.error(f"Connection error: {e}")
-        return None
+                    ssl=AIOHTTP_CLIENT_SESSION_SSL,
+                ) as response:
+                    return await response.json()
+                    
+        except Exception as e:
+            # Enhanced error logging for better debugging
+            import traceback
+            error_type = type(e).__name__
+            error_msg = str(e) if e else "Unknown error"
+            error_traceback = traceback.format_exc()
+            
+            if attempt < max_retries:
+                # Log retry attempt
+                log.warning(f"Connection attempt {attempt + 1}/{max_retries + 1} failed for URL {url}:")
+                log.warning(f"  Error Type: {error_type}")
+                log.warning(f"  Error Message: {error_msg}")
+                
+                # Wait before retry with exponential backoff
+                import asyncio
+                wait_time = (2 ** attempt) * 0.5  # 0.5s, 1s, 2s
+                log.info(f"Retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
+                continue
+            else:
+                # Final attempt failed, log detailed error
+                log.error(f"Connection error for URL {url} after {max_retries + 1} attempts:")
+                log.error(f"  Error Type: {error_type}")
+                log.error(f"  Error Message: {error_msg}")
+                log.error(f"  Error Traceback: {error_traceback}")
+                
+                # Also log specific aiohttp errors
+                if hasattr(e, 'status'):
+                    log.error(f"  HTTP Status: {getattr(e, 'status')}")
+                if hasattr(e, 'headers'):
+                    log.error(f"  Response Headers: {getattr(e, 'headers')}")
+                # Log additional aiohttp-specific attributes safely
+                if hasattr(e, 'code'):
+                    log.error(f"  Error Code: {getattr(e, 'code')}")
+                if hasattr(e, 'message'):
+                    log.error(f"  Error Message: {getattr(e, 'message')}")
+                    
+                return None
 
 
 async def cleanup_response(
@@ -397,64 +435,85 @@ async def get_filtered_models(models, user):
 
 @cached(ttl=MODELS_CACHE_TTL)
 async def get_all_models(request: Request, user: UserModel) -> dict[str, list]:
-    log.info("get_all_models()")
+    import uuid
+    request_id = str(uuid.uuid4())[:8]
+    log.info(f"[{request_id}] get_all_models() - Starting model fetch")
 
     if not request.app.state.config.ENABLE_OPENAI_API:
+        log.info(f"[{request_id}] get_all_models() - OpenAI API disabled")
         return {"data": []}
 
-    responses = await get_all_models_responses(request, user=user)
+    try:
+        responses = await get_all_models_responses(request, user=user)
+        log.info(f"[{request_id}] get_all_models() - Got {len(responses)} responses")
+        
+        # Log response status for debugging
+        for idx, response in enumerate(responses):
+            if response is None:
+                log.warning(f"[{request_id}] get_all_models() - Response {idx} is None")
+            elif isinstance(response, dict) and "error" in response:
+                log.warning(f"[{request_id}] get_all_models() - Response {idx} has error: {response['error']}")
+            else:
+                log.debug(f"[{request_id}] get_all_models() - Response {idx} is valid")
 
-    def extract_data(response):
-        if response and "data" in response:
-            return response["data"]
-        if isinstance(response, list):
-            return response
-        return None
+        def extract_data(response):
+            if response and "data" in response:
+                return response["data"]
+            if isinstance(response, list):
+                return response
+            return None
 
-    def merge_models_lists(model_lists):
-        log.debug(f"merge_models_lists {model_lists}")
-        merged_list = []
+        def merge_models_lists(model_lists):
+            log.debug(f"[{request_id}] merge_models_lists {model_lists}")
+            merged_list = []
 
-        for idx, models in enumerate(model_lists):
-            if models is not None and "error" not in models:
+            for idx, models in enumerate(model_lists):
+                if models is not None and "error" not in models:
 
-                merged_list.extend(
-                    [
-                        {
-                            **model,
-                            "name": model.get("name", model["id"]),
-                            "owned_by": "openai",
-                            "openai": model,
-                            "connection_type": model.get("connection_type", "external"),
-                            "urlIdx": idx,
-                        }
-                        for model in models
-                        if (model.get("id") or model.get("name"))
-                        and (
-                            "api.openai.com"
-                            not in request.app.state.config.OPENAI_API_BASE_URLS[idx]
-                            or not any(
-                                name in model["id"]
-                                for name in [
-                                    "babbage",
-                                    "dall-e",
-                                    "davinci",
-                                    "embedding",
-                                    "tts",
-                                    "whisper",
-                                ]
+                    merged_list.extend(
+                        [
+                            {
+                                **model,
+                                "name": model.get("name", model["id"]),
+                                "owned_by": "openai",
+                                "openai": model,
+                                "connection_type": model.get("connection_type", "external"),
+                                "urlIdx": idx,
+                            }
+                            for model in models
+                            if (model.get("id") or model.get("name"))
+                            and (
+                                "api.openai.com"
+                                not in request.app.state.config.OPENAI_API_BASE_URLS[idx]
+                                or not any(
+                                    name in model["id"]
+                                    for name in [
+                                        "babbage",
+                                        "dall-e",
+                                        "davinci",
+                                        "embedding",
+                                        "tts",
+                                        "whisper",
+                                    ]
+                                )
                             )
-                        )
-                    ]
-                )
+                        ]
+                    )
 
-        return merged_list
+            return merged_list
 
-    models = {"data": merge_models_lists(map(extract_data, responses))}
-    log.debug(f"models: {models}")
+        models = {"data": merge_models_lists(map(extract_data, responses))}
+        log.info(f"[{request_id}] get_all_models() - Returning {len(models['data'])} models")
+        log.debug(f"[{request_id}] models: {models}")
 
-    request.app.state.OPENAI_MODELS = {model["id"]: model for model in models["data"]}
-    return models
+        request.app.state.OPENAI_MODELS = {model["id"]: model for model in models["data"]}
+        return models
+        
+    except Exception as e:
+        log.error(f"[{request_id}] get_all_models() - Unexpected error: {type(e).__name__}: {str(e)}")
+        import traceback
+        log.error(f"[{request_id}] get_all_models() - Traceback: {traceback.format_exc()}")
+        return {"data": []}
 
 
 @router.get("/models")
@@ -653,6 +712,81 @@ async def verify_connection(
             raise HTTPException(
                 status_code=500, detail="Open WebUI: Server Connection Error"
             )
+
+
+@router.get("/health/connections")
+async def check_connection_health(request: Request, user=Depends(get_admin_user)):
+    """Diagnostic endpoint to check the health of all configured API connections"""
+    if not request.app.state.config.ENABLE_OPENAI_API:
+        return {"status": "disabled", "message": "OpenAI API is disabled"}
+    
+    health_results = []
+    
+    for idx, url in enumerate(request.app.state.config.OPENAI_API_BASE_URLS):
+        key = request.app.state.config.OPENAI_API_KEYS[idx]
+        api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
+            str(idx),
+            request.app.state.config.OPENAI_API_CONFIGS.get(url, {})
+        )
+        
+        connection_info = {
+            "index": idx,
+            "url": url,
+            "has_key": bool(key),
+            "key_length": len(key) if key else 0,
+            "config": api_config,
+            "status": "unknown"
+        }
+        
+        try:
+            # Test the connection with a simple models request
+            test_url = f"{url}/models"
+            timeout = aiohttp.ClientTimeout(total=5)  # Shorter timeout for health check
+            
+            async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+                start_time = time.time()
+                async with session.get(
+                    test_url,
+                    headers={"Authorization": f"Bearer {key}"} if key else {},
+                    ssl=AIOHTTP_CLIENT_SESSION_SSL,
+                ) as response:
+                    response_time = time.time() - start_time
+                    connection_info.update({
+                        "status": "healthy",
+                        "http_status": response.status,
+                        "response_time_ms": round(response_time * 1000, 2),
+                        "response_headers": dict(response.headers)
+                    })
+                    
+                    if response.status == 200:
+                        try:
+                            data = await response.json()
+                            connection_info["model_count"] = len(data.get("data", [])) if isinstance(data, dict) else 0
+                        except:
+                            connection_info["model_count"] = "parse_error"
+                    else:
+                        connection_info["status"] = f"http_error_{response.status}"
+                        
+        except Exception as e:
+            connection_info.update({
+                "status": "error",
+                "error_type": type(e).__name__,
+                "error_message": str(e),
+                "error_details": {
+                    "timeout": getattr(e, 'timeout', None),
+                    "status": getattr(e, 'status', None),
+                    "headers": getattr(e, 'headers', None)
+                }
+            })
+        
+        health_results.append(connection_info)
+    
+    return {
+        "timestamp": time.time(),
+        "total_connections": len(health_results),
+        "healthy_connections": len([r for r in health_results if r["status"] == "healthy"]),
+        "connections": health_results
+    }
 
 
 def get_azure_allowed_params(api_version: str) -> set[str]:
