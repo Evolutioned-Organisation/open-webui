@@ -5,7 +5,7 @@
 	import relativeTime from 'dayjs/plugin/relativeTime';
 	dayjs.extend(relativeTime);
 
-	import { getBatchesViaProxy, getBatchDetailsViaProxy, type BatchListItem } from '$lib/apis/aimby';
+	import { getBatchesViaProxy, type BatchListItem } from '$lib/apis/aimby';
 	import { getAimbienceConfig } from '$lib/apis/auths'; // Updated import
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import ArrowDownTray from '$lib/components/icons/ArrowDownTray.svelte';
@@ -31,11 +31,8 @@
 	// Search functionality
 	let searchQuery = '';
 	let filteredBatches: BatchListItem[] = [];
-	
-	// Batch selection and modal state
-	let selectedBatch: BatchListItem | null = null;
-	let batchDetails: any = null;
-	let loadingDetails = false;
+
+	// Modal state
 	let showBatchModal = false;
 	let selectedBatchForModal: BatchListItem | null = null;
 
@@ -126,28 +123,6 @@
 
 	const refreshBatches = () => {
 		fetchBatches();
-	};
-
-	const selectBatch = (batch: BatchListItem) => {
-		selectedBatch = batch;
-		batchDetails = null;
-		fetchBatchDetails(batch.batch_id);
-	};
-
-	const fetchBatchDetails = async (batchId: string) => {
-		loadingDetails = true;
-		try {
-			const details = await getBatchDetailsViaProxy(localStorage.token || '', batchId);
-			if (details) {
-				batchDetails = details;
-				toast.success('Batch details loaded successfully');
-			}
-		} catch (error) {
-			console.error('Error fetching batch details:', error);
-			toast.error('Failed to load batch details');
-		} finally {
-			loadingDetails = false;
-		}
 	};
 
 	const openBatchModal = (batch: BatchListItem) => {
@@ -401,9 +376,7 @@
 			<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
 				<div class="flex items-center justify-between">
 					<h3 class="text-lg font-medium text-gray-900 dark:text-white">Batch History</h3>
-					<div class="text-sm text-gray-500 dark:text-gray-400">
-						Click on a row to view batch details
-					</div>
+					<div class="text-sm text-gray-500 dark:text-gray-400"></div>
 				</div>
 			</div>
 
@@ -589,13 +562,6 @@
 											>
 												Quick View
 											</button>
-											<button
-												on:click={() => selectBatch(batch)}
-												class="px-2 py-1 text-xs bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300 hover:bg-purple-200 dark:hover:bg-purple-800/30 rounded transition-colors"
-												title="View in details panel"
-											>
-												View in Panel
-											</button>
 											<a
 												href={`/admin/aimbience/batch-details?id=${encodeURIComponent(batch.batch_id)}`}
 												class="px-2 py-1 text-xs bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-800/30 rounded transition-colors"
@@ -639,87 +605,11 @@
 				</div>
 			</div>
 		</div>
-
-		<!-- Batch Details Panel -->
-		{#if selectedBatch}
-			<div class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-				<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-					<div class="flex items-center justify-between">
-						<h3 class="text-lg font-medium text-gray-900 dark:text-white">
-							Batch Details: {selectedBatch.batch_id}
-						</h3>
-						<button
-							class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-							on:click={() => { selectedBatch = null; batchDetails = null; }}
-							aria-label="Close batch details"
-						>
-							<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-							</svg>
-						</button>
-					</div>
-				</div>
-
-				<div class="px-6 py-4">
-					{#if loadingDetails}
-						<div class="flex items-center justify-center py-8">
-							<Spinner className="size-6" />
-							<span class="ml-2 text-gray-600 dark:text-gray-400">Loading batch details...</span>
-						</div>
-					{:else if batchDetails}
-						<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-							<div class="space-y-4">
-								<h4 class="text-sm font-medium text-gray-900 dark:text-white">Basic Information</h4>
-								<dl class="space-y-3">
-									<div>
-										<dt class="text-xs font-medium text-gray-500 dark:text-gray-400">Batch ID</dt>
-										<dd class="text-sm text-gray-900 dark:text-white font-mono">{batchDetails.batch_id}</dd>
-									</div>
-									<div>
-										<dt class="text-xs font-medium text-gray-500 dark:text-gray-400">Status</dt>
-										<dd class="text-sm">
-											<Badge type={getStatusType(batchDetails.status)} content={batchDetails.status || 'Unknown'} />
-										</dd>
-									</div>
-									<div>
-										<dt class="text-xs font-medium text-gray-500 dark:text-gray-400">File Count</dt>
-										<dd class="text-sm text-gray-900 dark:text-white">{batchDetails.file_count || 0}</dd>
-									</div>
-									<div>
-										<dt class="text-xs font-medium text-gray-500 dark:text-gray-400">Source</dt>
-										<dd class="text-sm text-gray-900 dark:text-white">{batchDetails.source || 'N/A'}</dd>
-									</div>
-								</dl>
-							</div>
-							<div class="space-y-4">
-								<h4 class="text-sm font-medium text-gray-900 dark:text-white">Metadata</h4>
-								<dl class="space-y-3">
-									<div>
-										<dt class="text-xs font-medium text-gray-500 dark:text-gray-400">Creation Date</dt>
-										<dd class="text-sm text-gray-900 dark:text-white">{formatDate(batchDetails.creation_date)}</dd>
-									</div>
-									<div>
-										<dt class="text-xs font-medium text-gray-500 dark:text-gray-400">Processing Status</dt>
-										<dd class="text-sm text-gray-900 dark:text-white">{batchDetails.processing_status || 'N/A'}</dd>
-									</div>
-								</dl>
-							</div>
-						</div>
-					{:else}
-						<div class="text-center py-8">
-							<div class="text-gray-500 dark:text-gray-400 text-sm">
-								Failed to load batch details. Please try again.
-							</div>
-						</div>
-					{/if}
-				</div>
-			</div>
-		{/if}
 	{/if}
 
 	<!-- Batch Details Modal -->
-	<BatchDetailsModal 
-		bind:show={showBatchModal} 
-		batchDetails={selectedBatchForModal ? { ...selectedBatchForModal } : null} 
+	<BatchDetailsModal
+		bind:show={showBatchModal}
+		batchDetails={selectedBatchForModal ? { ...selectedBatchForModal } : null}
 	/>
 </div>

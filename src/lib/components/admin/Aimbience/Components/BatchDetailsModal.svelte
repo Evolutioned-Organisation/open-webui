@@ -40,9 +40,7 @@
 <Modal size="lg" bind:show>
 	<div>
 		<div class="flex justify-between dark:text-gray-300 px-5 pt-4 pb-2">
-			<div class="text-lg font-medium self-center">
-				Batch Details
-			</div>
+			<div class="text-lg font-medium self-center">Batch Details</div>
 			<button
 				class="self-center"
 				on:click={() => {
@@ -68,9 +66,9 @@
 						<div>
 							<dt class="text-xs font-medium text-gray-500 dark:text-gray-400">Status</dt>
 							<dd class="mt-1">
-								<Badge 
-									type={getStatusType(batchDetails.status)} 
-									content={batchDetails.status || 'Unknown'} 
+								<Badge
+									type={getStatusType(batchDetails.status)}
+									content={batchDetails.status || 'Unknown'}
 								/>
 							</dd>
 						</div>
@@ -93,7 +91,9 @@
 							</dd>
 						</div>
 						<div>
-							<dt class="text-xs font-medium text-gray-500 dark:text-gray-400">Processing Status</dt>
+							<dt class="text-xs font-medium text-gray-500 dark:text-gray-400">
+								Processing Status
+							</dt>
 							<dd class="mt-1 text-sm text-gray-900 dark:text-white">
 								{batchDetails.processing_status || 'N/A'}
 							</dd>
@@ -104,8 +104,11 @@
 				<!-- Additional Metadata -->
 				{#if batchDetails.batch_metadata}
 					<div class="mb-6">
-						<h3 class="text-sm font-medium text-gray-900 dark:text-white mb-3">Additional Metadata</h3>
-						<pre class="text-xs bg-gray-50 dark:bg-gray-700 p-3 rounded-lg overflow-auto max-h-48 text-gray-900 dark:text-white">
+						<h3 class="text-sm font-medium text-gray-900 dark:text-white mb-3">
+							Additional Metadata
+						</h3>
+						<pre
+							class="text-xs bg-gray-50 dark:bg-gray-700 p-3 rounded-lg overflow-auto max-h-48 text-gray-900 dark:text-white">
 							{JSON.stringify(batchDetails.batch_metadata, null, 2)}
 						</pre>
 					</div>
@@ -120,7 +123,7 @@
 						Open Full Details
 					</a>
 					<button
-						on:click={() => show = false}
+						on:click={() => (show = false)}
 						class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
 					>
 						Close
@@ -129,9 +132,7 @@
 			</div>
 		{:else}
 			<div class="px-6 pb-5 text-center py-8">
-				<div class="text-gray-500 dark:text-gray-400 text-sm">
-					No batch details available
-				</div>
+				<div class="text-gray-500 dark:text-gray-400 text-sm">No batch details available</div>
 			</div>
 		{/if}
 	</div>
