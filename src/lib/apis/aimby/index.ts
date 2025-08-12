@@ -1,5 +1,3 @@
-import { AIMBY_API_BASE_URL } from '$lib/constants';
-
 export interface BatchListItem {
 	batch_id: string;
 	creation_date: string;
@@ -13,39 +11,12 @@ export interface BatchListResponse {
 	total_count: number;
 }
 
-export const getBatches = async (
-	token: string = '',
-	count: number = 10,
-	aimbyApiUrl?: string,
-	aimbyApiKey?: string
-): Promise<BatchListResponse | null> => {
-	const baseUrl = aimbyApiUrl || AIMBY_API_BASE_URL;
-	let error = null;
-
-	try {
-		const res = await fetch(`${baseUrl}/audit/batches?count=${count}`, {
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				...(token && { Authorization: `Bearer ${token}` }),
-				...(aimbyApiKey && { 'X-Aimbience-API-Key': aimbyApiKey })
-			}
-		});
-
-		if (!res.ok) {
-			const errorData = await res.json().catch(() => ({ detail: res.statusText }));
-			error = errorData.detail || res.statusText;
-			return null;
-		}
-
-		return await res.json();
-	} catch (err) {
-		console.error(err);
-		error = err.detail;
-		return null;
-	}
-};
+export interface FileAuditResponse {
+	filename: string;
+	message: string;
+	timestamp: string;
+	status: string;
+}
 
 export const getBatchesViaProxy = async (
 	token: string = '',
@@ -54,7 +25,12 @@ export const getBatchesViaProxy = async (
 	let error = null;
 
 	try {
-		const res = await fetch(`/api/v1/auths/admin/aimbience/proxy/audit/batches?count=${count}`, {
+		// Use relative path - Vite will proxy this to the backend
+		const apiUrl = `/api/v1/auths/admin/aimbience/proxy/api/v1/audit/batches?count=${count}`;
+
+		console.log('Fetching batches from:', apiUrl);
+
+		const res = await fetch(apiUrl, {
 			method: 'GET',
 			headers: {
 				Accept: 'application/json',
@@ -66,47 +42,86 @@ export const getBatchesViaProxy = async (
 		if (!res.ok) {
 			const errorData = await res.json().catch(() => ({ detail: res.statusText }));
 			error = errorData.detail || res.statusText;
+			console.error('API error:', res.status, error);
 			return null;
 		}
 
 		return await res.json();
 	} catch (err) {
-		console.error(err);
-		error = err.detail;
+		console.error('Network error:', err);
+		error = err.detail || err.message;
 		return null;
 	}
 };
 
-export const getBatchDetails = async (
+export const getFileAuditViaProxy = async (
 	token: string = '',
-	batchId: string,
-	aimbyApiUrl?: string,
-	aimbyApiKey?: string
-): Promise<any | null> => {
-	const baseUrl = aimbyApiUrl || AIMBY_API_BASE_URL;
+	filename: string
+): Promise<FileAuditResponse | null> => {
 	let error = null;
 
 	try {
-		const res = await fetch(`${baseUrl}/audit/batch/${batchId}`, {
+		// Use relative path - Vite will proxy this to the backend
+		const apiUrl = `/api/v1/auths/admin/aimbience/proxy/audit/file/${filename}`;
+
+		console.log('Fetching file audit from:', apiUrl);
+
+		const res = await fetch(apiUrl, {
 			method: 'GET',
 			headers: {
 				Accept: 'application/json',
 				'Content-Type': 'application/json',
-				...(token && { Authorization: `Bearer ${token}` }),
-				...(aimbyApiKey && { 'X-Aimbience-API-Key': aimbyApiKey })
+				Authorization: `Bearer ${token}`
 			}
 		});
 
 		if (!res.ok) {
 			const errorData = await res.json().catch(() => ({ detail: res.statusText }));
 			error = errorData.detail || res.statusText;
+			console.error('API error:', res.status, error);
 			return null;
 		}
 
 		return await res.json();
 	} catch (err) {
-		console.error(err);
-		error = err.detail;
+		console.error('Network error:', err);
+		error = err.detail || err.message;
+		return null;
+	}
+};
+
+export const getBatchDetailsViaProxy = async (
+	token: string = '',
+	batchId: string
+): Promise<any | null> => {
+	let error = null;
+
+	try {
+		// Use relative path - Vite will proxy this to the backend
+		const apiUrl = `/api/v1/auths/admin/aimbience/proxy/audit/batch/${batchId}`;
+
+		console.log('Fetching batch details from:', apiUrl);
+
+		const res = await fetch(apiUrl, {
+			method: 'GET',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			}
+		});
+
+		if (!res.ok) {
+			const errorData = await res.json().catch(() => ({ detail: res.statusText }));
+			error = errorData.detail || res.statusText;
+			console.error('API error:', res.status, error);
+			return null;
+		}
+
+		return await res.json();
+	} catch (err) {
+		console.error('Network error:', err);
+		error = err.detail || err.message;
 		return null;
 	}
 };

@@ -1102,17 +1102,9 @@ async def aimbience_proxy(
 ):
     """Proxy endpoint for Aimbience API calls to avoid CORS issues"""
     try:
-        # Get Aimbience config
-        aimbience_config = getattr(request.app.state.config, 'AIMBENCE_CONFIG', None)
-        if not aimbience_config:
-            # Try to get from individual fields
-            aimbience_config = {
-                'AIMBENCE_API_BASE_URL': getattr(request.app.state.config, 'AIMBENCE_API_BASE_URL', 'http://localhost:8000'),
-                'AIMBENCE_API_KEY': getattr(request.app.state.config, 'AIMBENCE_API_KEY', ''),
-            }
-        
-        base_url = aimbience_config.get('AIMBENCE_API_BASE_URL', 'http://localhost:8000')
-        api_key = aimbience_config.get('AIMBENCE_API_KEY', '')
+        # Get Aimbience config from individual fields
+        base_url = getattr(request.app.state.config, 'AIMBENCE_API_BASE_URL', '')
+        api_key = getattr(request.app.state.config, 'AIMBENCE_API_KEY', '')
         
         # Build the target URL
         target_url = f"{base_url}/{path}"
@@ -1122,17 +1114,25 @@ async def aimbience_proxy(
         if query_params:
             target_url += f"?{query_params}"
         
+        # Log the proxy request for debugging
+        print(f"Aimbience proxy: {path} -> {target_url}")
+        print(f"API Key present: {bool(api_key)}")
+        
         # Make the request to aimby-api
         import httpx
         async with httpx.AsyncClient() as client:
             headers = {
                 "Accept": "application/json",
-                "Content-Type": "application/json",
+                "Content-Type": "application/json"
+                
             }
             if api_key:
                 headers["Authorization"] = f"Bearer {api_key}"
             
             response = await client.get(target_url, headers=headers, timeout=30.0)
+            
+            # Log the response for debugging
+            print(f"Aimbience proxy response: {response.status_code}")
             
             # Return the response from aimby-api
             return Response(
@@ -1142,4 +1142,5 @@ async def aimbience_proxy(
             )
             
     except Exception as e:
+        print(f"Aimbience proxy error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Proxy error: {str(e)}")

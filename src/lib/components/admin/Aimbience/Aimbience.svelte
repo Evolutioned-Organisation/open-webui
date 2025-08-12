@@ -9,6 +9,7 @@
 	import WorkflowSync from '../Settings/WorkflowSync.svelte';
 	import DocumentIngestion from './Components/DocumentIngestion.svelte';
 	import AimbienceConfig from './Components/AimbienceConfig.svelte';
+	import AimbienceTools from './Components/AimbienceTools.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -167,6 +168,11 @@
 				<p class="text-gray-600 dark:text-gray-400 mb-6">
 					This section contains Aimbience-specific tools and utilities.
 				</p>
+
+				<!-- Aimbience Tools Section -->
+				<div class="mb-8">
+					<AimbienceTools />
+				</div>
 
 				<!-- Document Ingestion Section -->
 				<div class="mb-8">

@@ -5,7 +5,7 @@
 	import relativeTime from 'dayjs/plugin/relativeTime';
 	dayjs.extend(relativeTime);
 
-	import { getBatches, getBatchDetails, type BatchListItem } from '$lib/apis/aimby';
+	import { getBatchesViaProxy, getBatchDetailsViaProxy, type BatchListItem } from '$lib/apis/aimby';
 	import { getAimbienceConfig } from '$lib/apis/auths'; // Updated import
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import ArrowDownTray from '$lib/components/icons/ArrowDownTray.svelte';
@@ -80,12 +80,8 @@
 	const fetchBatches = async () => {
 		loading = true;
 		try {
-			const response = await getBatches(
-				localStorage.token || '',
-				count,
-				aimbienceConfig?.AIMBENCE_API_BASE_URL || 'http://localhost:8000',
-				aimbienceConfig?.AIMBENCE_API_KEY
-			);
+			// Use proxy function to avoid CORS issues
+			const response = await getBatchesViaProxy(localStorage.token || '', count);
 			if (response) {
 				batches = response.batches;
 				totalCount = response.total_count;
