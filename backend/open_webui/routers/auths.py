@@ -1050,3 +1050,96 @@ async def get_api_key(user=Depends(get_current_user)):
         }
     else:
         raise HTTPException(404, detail=ERROR_MESSAGES.API_KEY_NOT_FOUND)
+
+############################
+# Aimbience Config
+############################
+
+
+class AimbienceConfig(BaseModel):
+    ENABLE_AIMBENCE: bool = False
+    AIMBENCE_API_BASE_URL: str = "http://localhost:8000"
+    AIMBENCE_API_KEY: str = ""
+    AIMBENCE_TIMEOUT: int = 30
+    AIMBENCE_BATCH_SIZE: int = 10
+
+
+@router.get("/admin/config/aimbience", response_model=AimbienceConfig)
+async def get_aimbience_config(request: Request, user=Depends(get_admin_user)):
+    return {
+        "ENABLE_AIMBENCE": request.app.state.config.ENABLE_AIMBENCE,
+        "AIMBENCE_API_BASE_URL": request.app.state.config.AIMBENCE_API_BASE_URL,
+        "AIMBENCE_API_KEY": request.app.state.config.AIMBENCE_API_KEY,
+        "AIMBENCE_TIMEOUT": request.app.state.config.AIMBENCE_TIMEOUT,
+        "AIMBENCE_BATCH_SIZE": request.app.state.config.AIMBENCE_BATCH_SIZE,
+    }
+
+
+@router.post("/admin/config/aimbience")
+async def update_aimbience_config(
+    request: Request, form_data: AimbienceConfig, user=Depends(get_admin_user)
+):
+    request.app.state.config.ENABLE_AIMBENCE = form_data.ENABLE_AIMBENCE
+    request.app.state.config.AIMBENCE_API_BASE_URL = form_data.AIMBENCE_API_BASE_URL
+    request.app.state.config.AIMBENCE_API_KEY = form_data.AIMBENCE_API_KEY
+    request.app.state.config.AIMBENCE_TIMEOUT = form_data.AIMBENCE_TIMEOUT
+    request.app.state.config.AIMBENCE_BATCH_SIZE = form_data.AIMBENCE_BATCH_SIZE
+
+    return {
+        "ENABLE_AIMBENCE": request.app.state.config.ENABLE_AIMBENCE,
+        "AIMBENCE_API_BASE_URL": request.app.state.config.AIMBENCE_API_BASE_URL,
+        "AIMBENCE_API_KEY": request.app.state.config.AIMBENCE_API_KEY,
+        "AIMBENCE_TIMEOUT": request.app.state.config.AIMBENCE_TIMEOUT,
+        "AIMBENCE_BATCH_SIZE": request.app.state.config.AIMBENCE_BATCH_SIZE,
+    }
+
+
+@router.get("/admin/aimbience/proxy/{path:path}")
+async def aimbience_proxy(
+    request: Request, 
+    path: str, 
+    user=Depends(get_admin_user)
+):
+    """Proxy endpoint for Aimbience API calls to avoid CORS issues"""
+    try:
+        # Get Aimbience config
+        aimbience_config = getattr(request.app.state.config, 'AIMBENCE_CONFIG', None)
+        if not aimbience_config:
+            # Try to get from individual fields
+            aimbience_config = {
+                'AIMBENCE_API_BASE_URL': getattr(request.app.state.config, 'AIMBENCE_API_BASE_URL', 'http://localhost:8000'),
+                'AIMBENCE_API_KEY': getattr(request.app.state.config, 'AIMBENCE_API_KEY', ''),
+            }
+        
+        base_url = aimbience_config.get('AIMBENCE_API_BASE_URL', 'http://localhost:8000')
+        api_key = aimbience_config.get('AIMBENCE_API_KEY', '')
+        
+        # Build the target URL
+        target_url = f"{base_url}/{path}"
+        
+        # Get query parameters
+        query_params = str(request.query_params)
+        if query_params:
+            target_url += f"?{query_params}"
+        
+        # Make the request to aimby-api
+        import httpx
+        async with httpx.AsyncClient() as client:
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            }
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            
+            response = await client.get(target_url, headers=headers, timeout=30.0)
+            
+            # Return the response from aimby-api
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers=dict(response.headers)
+            )
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Proxy error: {str(e)}")
