@@ -6,6 +6,27 @@ export interface BatchListItem {
 	source?: string;
 }
 
+export interface BatchDetailsResponse {
+	batch_id: string;
+	message: string;
+	timestamp: string;
+	status: string;
+	file_count?: number;
+	processing_status?: string;
+	batch_metadata?: Record<string, any>;
+	creation_date?: string;
+	source?: string;
+	status_details?: string;
+	error_message?: string;
+	processing_start_time?: string;
+	processing_end_time?: string;
+	total_files?: number;
+	processed_files?: number;
+	failed_files?: number;
+	successful_files?: number;
+	additional_properties?: Record<string, any>;
+}
+
 export interface BatchListResponse {
 	batches: BatchListItem[];
 	total_count: number;
@@ -62,7 +83,7 @@ export const getFileAuditViaProxy = async (
 
 	try {
 		// Use relative path - Vite will proxy this to the backend
-		const apiUrl = `/api/v1/auths/admin/aimbience/proxy/audit/file/${filename}`;
+		const apiUrl = `/api/v1/auths/admin/aimbience/proxy/api/v1/audit/file/${filename}`;
 
 		console.log('Fetching file audit from:', apiUrl);
 
@@ -93,12 +114,12 @@ export const getFileAuditViaProxy = async (
 export const getBatchDetailsViaProxy = async (
 	token: string = '',
 	batchId: string
-): Promise<any | null> => {
+): Promise<BatchDetailsResponse | null> => {
 	let error = null;
 
 	try {
 		// Use relative path - Vite will proxy this to the backend
-		const apiUrl = `/api/v1/auths/admin/aimbience/proxy/audit/batch/${batchId}`;
+		const apiUrl = `/api/v1/auths/admin/aimbience/proxy/api/v1/audit/batch/${batchId}`;
 
 		console.log('Fetching batch details from:', apiUrl);
 
