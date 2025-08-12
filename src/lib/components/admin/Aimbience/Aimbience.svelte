@@ -136,7 +136,7 @@
 					/>
 				</svg>
 			</div>
-			<div class=" self-center">{$i18n.t('Aimbience Tools')}</div>
+			<div class=" self-center">{$i18n.t('Ingestion Mgt')}</div>
 		</button>
 	</div>
 
