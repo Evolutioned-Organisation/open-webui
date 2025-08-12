@@ -27,6 +27,27 @@
 	let orderBy: string = 'creation_date';
 	let direction: 'asc' | 'desc' = 'desc';
 
+	// Search functionality
+	let searchQuery = '';
+	let filteredBatches: BatchListItem[] = [];
+
+	// Reset pagination when search changes
+	$: if (searchQuery !== '') {
+		page = 1;
+	}
+
+	// Filter batches based on search query
+	$: filteredBatches = batches.filter((batch) => {
+		if (!searchQuery.trim()) return true;
+		const query = searchQuery.toLowerCase();
+		return (
+			batch.batch_id?.toLowerCase().includes(query) ||
+			batch.status?.toLowerCase().includes(query) ||
+			batch.source?.toLowerCase().includes(query) ||
+			(batch.file_count?.toString() || '').includes(query)
+		);
+	});
+
 	$: paginatedBatches = sortedBatches.slice((page - 1) * count, page * count);
 
 	// Update count when config changes
@@ -48,7 +69,7 @@
 		page = 1;
 	}
 
-	$: sortedBatches = [...batches].sort((a, b) => {
+	$: sortedBatches = [...filteredBatches].sort((a, b) => {
 		let aVal: any = a[orderBy as keyof BatchListItem];
 		let bVal: any = b[orderBy as keyof BatchListItem];
 
@@ -169,7 +190,8 @@
 			}
 		} catch (error) {
 			console.error('Error loading Aimbience config:', error);
-			toast.error($i18n.t('Failed to load Aimbience config: ') + error.message);
+			const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+			toast.error('Failed to load Aimbience config: ' + errorMessage);
 		}
 		fetchBatches();
 	});
@@ -223,7 +245,12 @@
 				class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700"
 			>
 				<div class="text-sm font-medium text-gray-600 dark:text-gray-400">Displayed</div>
-				<div class="text-2xl font-bold text-gray-900 dark:text-white">{batches.length}</div>
+				<div class="text-2xl font-bold text-gray-900 dark:text-white">{filteredBatches.length}</div>
+				{#if searchQuery && filteredBatches.length !== batches.length}
+					<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+						Filtered from {batches.length}
+					</div>
+				{/if}
 			</div>
 			<div
 				class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700"
@@ -235,12 +262,113 @@
 			</div>
 		</div>
 
+		<!-- Search Section -->
+		<div
+			class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700"
+		>
+			<div class="px-6 py-4">
+				<div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+					<div class="flex-1 max-w-md">
+						<label for="batch-search" class="sr-only">Search batches</label>
+						<div class="relative">
+							<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+								<svg
+									class="h-5 w-5 text-gray-400"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+									></path>
+								</svg>
+							</div>
+							<input
+								id="batch-search"
+								type="text"
+								bind:value={searchQuery}
+								class="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+								placeholder="Search batches by ID, status, source, or file count..."
+								on:keydown={(e) => {
+									if (e.key === 'Escape') {
+										searchQuery = '';
+										e.target.blur();
+									}
+								}}
+							/>
+							{#if searchQuery}
+								<button
+									on:click={() => (searchQuery = '')}
+									class="absolute inset-y-0 right-0 pr-3 flex items-center"
+									aria-label="Clear search"
+								>
+									<svg
+										class="h-5 w-5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M6 18L18 6M6 6l12 12"
+										></path>
+									</svg>
+								</button>
+							{/if}
+						</div>
+					</div>
+					<div class="flex items-center gap-4">
+						<!-- Count Selector -->
+						<div class="flex items-center gap-2">
+							<label for="count-selector" class="text-sm text-gray-600 dark:text-gray-400"
+								>Show:</label
+							>
+							<select
+								id="count-selector"
+								bind:value={count}
+								class="text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+								on:change={() => (page = 1)}
+							>
+								<option value={5}>5</option>
+								<option value={10}>10</option>
+								<option value={25}>25</option>
+								<option value={50}>50</option>
+								<option value={100}>100</option>
+							</select>
+						</div>
+
+						<!-- Results Info -->
+						<div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+							<span>Showing {filteredBatches.length} of {totalCount} batches</span>
+							{#if searchQuery}
+								<span
+									class="px-2 py-1 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 rounded-full text-xs"
+								>
+									Filtered
+								</span>
+							{/if}
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
 		<!-- Table Section -->
 		<div
 			class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700"
 		>
 			<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-				<h3 class="text-lg font-medium text-gray-900 dark:text-white">Batch History</h3>
+				<div class="flex items-center justify-between">
+					<h3 class="text-lg font-medium text-gray-900 dark:text-white">Batch History</h3>
+					<div class="text-sm text-gray-500 dark:text-gray-400">
+						Click on a row to view batch details
+					</div>
+				</div>
 			</div>
 
 			<div class="relative overflow-x-auto">
@@ -252,11 +380,17 @@
 					</div>
 				{/if}
 
-				{#if batches.length === 0 && !loading}
+				{#if filteredBatches.length === 0 && !loading}
 					<div class="text-center py-12">
 						<div class="text-gray-500 dark:text-gray-400 text-sm">
-							{#if loading}
-								Loading batches...
+							{#if searchQuery}
+								No batches found matching "{searchQuery}"
+								<button
+									on:click={() => (searchQuery = '')}
+									class="ml-2 text-blue-600 dark:text-blue-400 hover:underline"
+								>
+									Clear search
+								</button>
 							{:else}
 								No batches found
 							{/if}
@@ -412,11 +546,31 @@
 			</div>
 
 			<!-- Pagination -->
-			{#if totalCount > count}
-				<div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
-					<Pagination bind:page count={totalCount} perPage={count} />
+			<div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700">
+				<div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+					<!-- Pagination Info -->
+					<div class="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+						<span>
+							Showing {Math.min((page - 1) * count + 1, filteredBatches.length)} to {Math.min(
+								page * count,
+								filteredBatches.length
+							)} of {filteredBatches.length} results
+						</span>
+						{#if searchQuery}
+							<span
+								class="px-2 py-1 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 rounded-full text-xs"
+							>
+								Filtered
+							</span>
+						{/if}
+					</div>
+
+					<!-- Pagination Controls -->
+					{#if filteredBatches.length > count}
+						<Pagination bind:page count={filteredBatches.length} perPage={count} />
+					{/if}
 				</div>
-			{/if}
+			</div>
 		</div>
 	{/if}
 </div>

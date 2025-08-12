@@ -164,16 +164,6 @@
 			</div>
 		{:else if selectedTab === 'aimbience-tools'}
 			<div class="p-6">
-				<h2 class="text-2xl font-bold mb-4">Aimbience Tools</h2>
-				<p class="text-gray-600 dark:text-gray-400 mb-6">
-					This section contains Aimbience-specific tools and utilities.
-				</p>
-
-				<!-- Aimbience Tools Section -->
-				<div class="mb-8">
-					<AimbienceTools />
-				</div>
-
 				<!-- Document Ingestion Section -->
 				<div class="mb-8">
 					<DocumentIngestion />
