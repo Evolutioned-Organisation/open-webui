@@ -35,6 +35,12 @@
 		error = null;
 
 		try {
+			if (!batchId) {
+				error = 'No batch ID available';
+				toast.error('No batch ID available');
+				return;
+			}
+			
 			const details = await getBatchDetailsViaProxy(localStorage.token || '', batchId);
 			if (details) {
 				batchDetails = details;
@@ -153,7 +159,7 @@
 								<p class="text-sm font-medium text-green-800 dark:text-green-200">
 									Batch found successfully! Retrieved {Object.keys(
 										batchDetails.batch_metadata || {}
-									).length} metadata properties from Neo4j.
+									).length} metadata properties from the graph.
 								</p>
 							</div>
 						</div>
