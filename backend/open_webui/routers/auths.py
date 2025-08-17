@@ -1144,3 +1144,121 @@ async def aimbience_proxy(
     except Exception as e:
         print(f"Aimbience proxy error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Proxy error: {str(e)}")
+
+
+@router.post("/admin/aimbience/proxy/{path:path}")
+async def aimbience_proxy_post(
+    request: Request, 
+    path: str, 
+    user=Depends(get_admin_user)
+):
+    """Proxy POST endpoint for Aimbience API calls to avoid CORS issues"""
+    try:
+        # Get Aimbience config from individual fields
+        base_url = getattr(request.app.state.config, 'AIMBENCE_API_BASE_URL', '')
+        api_key = getattr(request.app.state.config, 'AIMBENCE_API_KEY', '')
+        
+        # Build the target URL
+        target_url = f"{base_url}/{path}"
+        
+        # Get the request body
+        body = await request.body()
+        
+        # Log the proxy request for debugging
+        print(f"Aimbience proxy POST: {path} -> {target_url}")
+        print(f"API Key present: {bool(api_key)}")
+        print(f"Request body: {body.decode() if body else 'No body'}")
+        
+        # Make the request to aimby-api
+        import httpx
+        async with httpx.AsyncClient() as client:
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            }
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            
+            response = await client.post(
+                target_url, 
+                content=body,
+                headers=headers, 
+                timeout=30.0
+            )
+            
+            # Log the response for debugging
+            print(f"Aimbience proxy POST response: {response.status_code}")
+            
+            # Return the response from aimby-api
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers=dict(response.headers)
+            )
+            
+    except Exception as e:
+        print(f"Aimbience proxy POST error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Proxy error: {str(e)}")
+
+
+@router.post("/admin/aimbience/sync-workflows")
+async def sync_workflows(
+    request: Request,
+    user=Depends(get_admin_user)
+):
+    """Direct workflow synchronization endpoint that calls AIMby API"""
+    try:
+        # Get Aimbience config from individual fields
+        base_url = getattr(request.app.state.config, 'AIMBENCE_API_BASE_URL', '')
+        api_key = getattr(request.app.state.config, 'AIMBENCE_API_KEY', '')
+        
+        if not base_url:
+            raise HTTPException(status_code=400, detail="AIMbience API base URL not configured")
+        
+        # Build the target URL for workflow sync
+        target_url = f"{base_url}/api/v1/sync/workflows"
+        
+        # Get the request body (if any additional parameters are passed)
+        body = await request.body()
+        request_data = {}
+        if body:
+            try:
+                request_data = await request.json()
+            except:
+                request_data = {}
+        
+        # Log the sync request for debugging
+        print(f"Workflow sync request: {target_url}")
+        print(f"API Key present: {bool(api_key)}")
+        print(f"Request data: {request_data}")
+        
+        # Make the request to aimby-api
+        import httpx
+        async with httpx.AsyncClient() as client:
+            headers = {
+                "Accept": "application/json",
+                "Content-Type": "application/json"
+            }
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            
+            response = await client.post(
+                target_url, 
+                json=request_data,
+                headers=headers, 
+                timeout=60.0  # Longer timeout for workflow sync
+            )
+            
+            # Log the response for debugging
+            print(f"Workflow sync response: {response.status_code}")
+            
+            # Return the response from aimby-api
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers=dict(response.headers)
+            )
+            
+    except Exception as e:
+        print(f"Workflow sync error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Workflow sync error: {str(e)}")

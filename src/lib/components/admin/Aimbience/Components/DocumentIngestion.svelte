@@ -124,16 +124,16 @@
 			}
 		} catch (error) {
 			console.error('Error fetching batches:', error);
-			
+
 			// Provide more specific error messages based on error type
 			let errorMessage = 'Failed to fetch batches';
-			
+
 			if (error instanceof TypeError && error.message.includes('fetch')) {
 				errorMessage = 'Network error - check if the Open WebUI backend is accessible';
 			} else if (error.message) {
 				errorMessage = `Error: ${error.message}`;
 			}
-			
+
 			toast.error(errorMessage);
 		} finally {
 			loading = false;

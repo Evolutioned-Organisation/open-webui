@@ -753,3 +753,31 @@ export const updateAimbienceConfig = async (token: string, body: object) => {
 
 	return res;
 };
+
+export const syncWorkflows = async (token: string, options: any = {}) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/admin/aimbience/sync-workflows`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(options)
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err.detail || err.message;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};

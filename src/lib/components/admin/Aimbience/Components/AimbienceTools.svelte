@@ -43,16 +43,16 @@
 			}
 		} catch (error) {
 			console.error('Error fetching batches:', error);
-			
+
 			// Provide more specific error messages based on error type
 			let errorMessage = 'Error fetching batches';
-			
+
 			if (error instanceof TypeError && error.message.includes('fetch')) {
 				errorMessage = 'Network error - check if the Open WebUI backend is accessible';
 			} else if (error.message) {
 				errorMessage = error.message;
 			}
-			
+
 			toast.error(errorMessage);
 		} finally {
 			loading = false;
@@ -74,20 +74,22 @@
 				batchDetails = details;
 				toast.success('Batch details retrieved successfully');
 			} else {
-				toast.error('Failed to retrieve batch details. Please check your connection and try again.');
+				toast.error(
+					'Failed to retrieve batch details. Please check your connection and try again.'
+				);
 			}
 		} catch (error) {
 			console.error('Error fetching batch details:', error);
-			
+
 			// Provide more specific error messages based on error type
 			let errorMessage = 'Error fetching batch details';
-			
+
 			if (error instanceof TypeError && error.message.includes('fetch')) {
 				errorMessage = 'Network error - check if the Open WebUI backend is accessible';
 			} else if (error.message) {
 				errorMessage = error.message;
 			}
-			
+
 			toast.error(errorMessage);
 		} finally {
 			loadingDetails = false;
@@ -150,16 +152,16 @@
 			}
 		} catch (error) {
 			console.error('Error auditing file:', error);
-			
+
 			// Provide more specific error messages based on error type
 			let errorMessage = 'Error auditing file';
-			
+
 			if (error instanceof TypeError && error.message.includes('fetch')) {
 				errorMessage = 'Network error - check if the Open WebUI backend is accessible';
 			} else if (error.message) {
 				errorMessage = error.message;
 			}
-			
+
 			toast.error(errorMessage);
 			fileAuditResult = null;
 		} finally {

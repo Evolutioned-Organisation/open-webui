@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount, getContext, createEventDispatcher } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { goto } from '$app/navigation';
-	import { WEBUI_BASE_URL } from '$lib/constants';
+	import { syncWorkflows } from '$lib/apis/auths';
+	import { getAimbienceConfig } from '$lib/apis/auths';
 
 	const dispatch = createEventDispatcher();
 	const i18n = getContext('i18n');
@@ -13,692 +13,345 @@
 	let syncMessage = '';
 	let lastSyncTime = null;
 	let syncHistory = [];
-	let aimbyApiUrl = '';
-	let timeoutSeconds = 30;
-	let showAdvancedSettings = false;
-	let environment = 'unknown';
-	let availableUrls = [];
-	let toolInstallLoading = false;
-	let toolInstallStatus = 'idle'; // 'idle', 'installing', 'success', 'error'
-	let toolInstallMessage = '';
-	let toolVerifyLoading = false;
-	let toolVerifyStatus = 'idle'; // 'idle', 'verifying', 'success', 'error'
-	let toolVerifyMessage = '';
+	let aimbienceConfig = null;
+	let loading = false;
 
-	// Load settings from localStorage or use defaults
+	// Load settings and history on mount
 	onMount(async () => {
-		// Detect environment and set up available URLs
-		await detectEnvironment();
-
-		const savedSettings = localStorage.getItem('workflowSyncSettings');
-		if (savedSettings) {
-			const settings = JSON.parse(savedSettings);
-			aimbyApiUrl = settings.aimbyApiUrl || getDefaultUrl();
-			timeoutSeconds = settings.timeoutSeconds || timeoutSeconds;
-		} else {
-			aimbyApiUrl = getDefaultUrl();
-		}
-
-		// Load sync history
-		const savedHistory = localStorage.getItem('workflowSyncHistory');
-		if (savedHistory) {
-			syncHistory = JSON.parse(savedHistory);
-		}
+		await loadAimbienceConfig();
+		loadSyncHistory();
 	});
 
-	const detectEnvironment = async () => {
+	const loadAimbienceConfig = async () => {
 		try {
-			// Try to detect if we're in a container environment
-			const response = await fetch(`${WEBUI_BASE_URL}/api/config`);
-			if (response.ok) {
-				const config = await response.json();
-				// Check for container-specific indicators
-				if (
-					window.location.hostname.includes('localhost') ||
-					window.location.hostname.includes('127.0.0.1')
-				) {
-					environment = 'development';
-				} else {
-					environment = 'production';
-				}
-			}
+			aimbienceConfig = await getAimbienceConfig(localStorage.token);
+			console.log('Loaded Aimbience config:', aimbienceConfig);
 		} catch (error) {
-			console.warn('Could not detect environment:', error);
-			// Default to development if we can't detect
-			environment = 'development';
-		}
-
-		// Set up available URLs based on environment
-		availableUrls = getAvailableUrls();
-	};
-
-	const getAvailableUrls = () => {
-		const urls = [];
-
-		// Docker container network (internal)
-		urls.push({
-			url: 'http://aimby-api:8000',
-			label: 'Docker Internal (aimby-api:8000)',
-			description: 'For container-to-container communication'
-		});
-
-		// Local development
-		urls.push({
-			url: 'http://localhost:8000',
-			label: 'Local Development (localhost:8000)',
-			description: 'For local development setup'
-		});
-
-		// Production external
-		urls.push({
-			url: 'https://api.aimbient.com',
-			label: 'Production External (api.aimbient.com)',
-			description: 'For production deployment'
-		});
-
-		// Custom URL option
-		urls.push({
-			url: '',
-			label: 'Custom URL',
-			description: 'Enter a custom URL'
-		});
-
-		return urls;
-	};
-
-	const getDefaultUrl = () => {
-		if (environment === 'development') {
-			return 'http://localhost:8000';
-		} else if (environment === 'production') {
-			return 'http://aimby-api:8000';
-		} else {
-			return 'http://aimby-api:8000'; // Default fallback
+			console.error('Error loading Aimbience config:', error);
+			toast.error('Failed to load Aimbience configuration');
 		}
 	};
 
-	const saveSettings = () => {
-		const settings = {
-			aimbyApiUrl,
-			timeoutSeconds
-		};
-		localStorage.setItem('workflowSyncSettings', JSON.stringify(settings));
-		toast.success($i18n.t('Settings saved successfully!'));
+	const loadSyncHistory = () => {
+		const savedHistory = localStorage.getItem('workflowSyncHistory');
+		if (savedHistory) {
+			try {
+				syncHistory = JSON.parse(savedHistory);
+			} catch (error) {
+				console.error('Error parsing sync history:', error);
+				syncHistory = [];
+			}
+		}
 	};
 
-	const syncWorkflows = async () => {
+	const saveSyncHistory = () => {
+		try {
+			localStorage.setItem('workflowSyncHistory', JSON.stringify(syncHistory));
+		} catch (error) {
+			console.error('Error saving sync history:', error);
+		}
+	};
+
+	const syncWorkflowsHandler = async () => {
+		if (!aimbienceConfig?.ENABLE_AIMBENCE) {
+			toast.error('AIMbience integration is not enabled. Please enable it in the AIMbience Configuration tab first.');
+			return;
+		}
+
+		if (!aimbienceConfig?.AIMBENCE_API_BASE_URL) {
+			toast.error('AIMbience API base URL is not configured. Please configure it in the AIMbience Configuration tab first.');
+			return;
+		}
+
 		syncStatus = 'syncing';
 		syncMessage = 'Starting workflow synchronization...';
+		loading = true;
 
 		try {
-			// Call the AIMBY sync tool through the tools API
-			const response = await fetch(`${WEBUI_BASE_URL}/api/v1/tools/execute`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${localStorage.token}`
-				},
-				body: JSON.stringify({
-					tool_id: 'aimby_sync_workflows',
-					function_name: 'sync_workflows',
-					parameters: {
-						// Pass custom settings as parameters
-						custom_api_url: aimbyApiUrl,
-						custom_timeout: timeoutSeconds
-					}
-				})
+			console.log('Starting workflow synchronization...');
+			console.log('Using AIMbience config:', aimbienceConfig);
+
+			// Call the new direct workflow sync endpoint
+			const result = await syncWorkflows(localStorage.token, {
+				timeout: aimbienceConfig.AIMBENCE_TIMEOUT || 30,
+				source: 'open-webui-admin',
+				timestamp: new Date().toISOString()
 			});
 
-			if (response.ok) {
-				const result = await response.json();
+			if (result) {
 				lastSyncTime = new Date().toISOString();
-
-				// Check if the tool execution was successful
-				if (result.success && result.result) {
-					// Check if the result contains error information from the tool
-					if (typeof result.result === 'string' && result.result.includes('❌')) {
-						syncStatus = 'error';
-						syncMessage = result.result;
-						toast.error($i18n.t('Workflow sync failed'));
-					} else {
-						syncStatus = 'success';
-						syncMessage = result.result;
-						toast.success($i18n.t('Workflow sync completed successfully!'));
-					}
-				} else {
-					syncStatus = 'error';
-					syncMessage = result.error || result.detail || 'Workflow sync failed';
-					toast.error($i18n.t('Workflow sync failed'));
-				}
-
+				syncStatus = 'success';
+				syncMessage = 'Workflow synchronization completed successfully!';
+				
 				// Add to history
 				const historyEntry = {
 					timestamp: lastSyncTime,
-					status: syncStatus,
+					status: 'success',
 					message: syncMessage,
-					result: result.result || result
+					result: result,
+					config: {
+						api_url: aimbienceConfig.AIMBENCE_API_BASE_URL,
+						timeout: aimbienceConfig.AIMBENCE_TIMEOUT
+					}
 				};
+				
 				syncHistory.unshift(historyEntry);
 				if (syncHistory.length > 10) {
 					syncHistory = syncHistory.slice(0, 10);
 				}
-				localStorage.setItem('workflowSyncHistory', JSON.stringify(syncHistory));
+				saveSyncHistory();
+				
+				toast.success('Workflow sync completed successfully!');
+				console.log('Workflow sync result:', result);
 			} else {
-				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+				throw new Error('No response received from workflow sync');
 			}
 		} catch (error) {
-			syncStatus = 'error';
-			syncMessage = `Sync failed: ${error.message}`;
+			console.error('Workflow sync error:', error);
+			
 			lastSyncTime = new Date().toISOString();
-
+			syncStatus = 'error';
+			
+			// Provide more specific error messages based on error type
+			let errorMessage = 'Workflow synchronization failed';
+			
+			if (error.message) {
+				if (error.message.includes('401')) {
+					errorMessage = 'Authentication failed. Please check your AIMbience API key.';
+				} else if (error.message.includes('404')) {
+					errorMessage = 'Workflow sync endpoint not found. Please check your AIMbience API configuration.';
+				} else if (error.message.includes('500')) {
+					errorMessage = 'Server error during workflow sync. Please try again later.';
+				} else if (error.message.includes('timeout')) {
+					errorMessage = 'Workflow sync timed out. Please check your AIMbience API connection.';
+				} else {
+					errorMessage = `Workflow sync failed: ${error.message}`;
+				}
+			}
+			
+			syncMessage = errorMessage;
+			
 			// Add to history
 			const historyEntry = {
 				timestamp: lastSyncTime,
 				status: 'error',
-				message: syncMessage,
-				error: error.message
+				message: errorMessage,
+				error: error.message,
+				config: {
+					api_url: aimbienceConfig?.AIMBENCE_API_BASE_URL,
+					timeout: aimbienceConfig?.AIMBENCE_TIMEOUT
+				}
 			};
+			
 			syncHistory.unshift(historyEntry);
 			if (syncHistory.length > 10) {
 				syncHistory = syncHistory.slice(0, 10);
 			}
-			localStorage.setItem('workflowSyncHistory', JSON.stringify(syncHistory));
-
-			toast.error($i18n.t('Workflow sync failed!'));
-		}
-	};
-
-	const getWorkflowStatus = async () => {
-		try {
-			const response = await fetch(`${WEBUI_BASE_URL}/api/v1/tools/execute`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${localStorage.token}`
-				},
-				body: JSON.stringify({
-					tool_id: 'aimby_sync_workflows',
-					function_name: 'get_workflows_status',
-					parameters: {
-						// Pass custom settings as parameters
-						custom_api_url: aimbyApiUrl,
-						custom_timeout: timeoutSeconds
-					}
-				})
-			});
-
-			if (response.ok) {
-				const result = await response.json();
-
-				// Check if the tool execution was successful
-				if (result.success && result.result) {
-					// Check if the result contains error information from the tool
-					if (typeof result.result === 'string' && result.result.includes('❌')) {
-						toast.error($i18n.t('Failed to get workflow status'));
-						throw new Error(result.result);
-					} else {
-						toast.success($i18n.t('Workflow status retrieved successfully!'));
-						return result.result;
-					}
-				} else {
-					toast.error($i18n.t('Failed to get workflow status'));
-					throw new Error(result.error || result.detail || 'Failed to get workflow status');
-				}
-			} else {
-				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-			}
-		} catch (error) {
-			toast.error($i18n.t('Failed to get workflow status!'));
-			throw error;
-		}
-	};
-
-	const installTool = async () => {
-		toolInstallLoading = true;
-		toolInstallStatus = 'installing';
-		toolInstallMessage = 'Installing AIMBY sync tool...';
-
-		try {
-			// Call the tool installation API endpoint
-			const response = await fetch(`${WEBUI_BASE_URL}/api/v1/utils/admin/install-aimby-tool`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${localStorage.token}`
-				}
-			});
-
-			if (response.ok) {
-				const result = await response.json();
-
-				if (result.success) {
-					toolInstallStatus = 'success';
-					toolInstallMessage = result.message || 'Tool installed successfully!';
-					toast.success($i18n.t('AIMBY tool installed successfully!'));
-				} else {
-					toolInstallStatus = 'error';
-					toolInstallMessage = result.message || result.error || 'Tool installation failed';
-					toast.error($i18n.t('Tool installation failed'));
-				}
-			} else {
-				const errorText = await response.text();
-				toolInstallStatus = 'error';
-				toolInstallMessage = `Installation failed: ${response.status} ${errorText}`;
-				toast.error($i18n.t('Tool installation failed'));
-			}
-		} catch (error) {
-			toolInstallStatus = 'error';
-			toolInstallMessage = `Installation error: ${error.message}`;
-			toast.error($i18n.t('Tool installation failed'));
+			saveSyncHistory();
+			
+			toast.error(errorMessage);
 		} finally {
-			toolInstallLoading = false;
-		}
-	};
-
-	const verifyTool = async () => {
-		toolVerifyLoading = true;
-		toolVerifyStatus = 'verifying';
-		toolVerifyMessage = 'Verifying AIMBY sync tool...';
-
-		try {
-			// Call the tool verification API endpoint
-			const response = await fetch(`${WEBUI_BASE_URL}/api/v1/utils/admin/verify-aimby-tool`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${localStorage.token}`
-				}
-			});
-
-			if (response.ok) {
-				const result = await response.json();
-
-				if (result.success) {
-					toolVerifyStatus = 'success';
-					toolVerifyMessage = result.message || 'Tool verified successfully!';
-					toast.success($i18n.t('AIMBY tool verified successfully!'));
-				} else {
-					toolVerifyStatus = 'error';
-					toolVerifyMessage = result.message || result.error || 'Tool verification failed';
-					toast.error($i18n.t('Tool verification failed'));
-				}
-			} else {
-				const errorText = await response.text();
-				toolVerifyStatus = 'error';
-				toolVerifyMessage = `Verification failed: ${response.status} ${errorText}`;
-				toast.error($i18n.t('Tool verification failed'));
-			}
-		} catch (error) {
-			toolVerifyStatus = 'error';
-			toolVerifyMessage = `Verification error: ${error.message}`;
-			toast.error($i18n.t('Tool verification failed'));
-		} finally {
-			toolVerifyLoading = false;
+			loading = false;
 		}
 	};
 
 	const clearHistory = () => {
 		syncHistory = [];
 		localStorage.removeItem('workflowSyncHistory');
-		toast.success($i18n.t('Sync history cleared!'));
+		toast.success('Sync history cleared');
 	};
 
-	const testConnection = async () => {
-		if (!aimbyApiUrl) {
-			toast.error($i18n.t('Please enter a valid API URL'));
-			return;
+	const getStatusType = (status: string) => {
+		switch (status) {
+			case 'success':
+				return 'success';
+			case 'error':
+				return 'error';
+			case 'syncing':
+				return 'warning';
+			default:
+				return 'muted';
 		}
+	};
 
+	const formatTimestamp = (timestamp: string) => {
 		try {
-			const response = await fetch(`${aimbyApiUrl}/health`, {
-				method: 'GET',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				signal: AbortSignal.timeout(timeoutSeconds * 1000)
-			});
-
-			if (response.ok) {
-				toast.success($i18n.t('Connection successful! API is reachable.'));
-			} else {
-				toast.warning($i18n.t('API responded but with status: ') + response.status);
-			}
-		} catch (error) {
-			if (error.name === 'AbortError') {
-				toast.error($i18n.t('Connection timeout. Please check the URL and try again.'));
-			} else {
-				toast.error($i18n.t('Connection failed: ') + error.message);
-			}
+			return new Date(timestamp).toLocaleString();
+		} catch {
+			return timestamp;
 		}
 	};
 </script>
 
-<div class="flex flex-col h-full justify-between space-y-6 text-sm">
-	<div class="space-y-6">
-		<!-- Workflow Sync Section -->
-		<div class="space-y-4">
-			<div class="flex items-center justify-between">
-				<h3 class="text-lg font-semibold text-gray-900 dark:text-white">
-					{$i18n.t('Workflow Synchronization')}
-				</h3>
-				<button
-					type="button"
-					class="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-					on:click={() => (showAdvancedSettings = !showAdvancedSettings)}
-				>
-					{$i18n.t(showAdvancedSettings ? 'Hide Advanced' : 'Show Advanced')}
-				</button>
+<div class="space-y-6">
+	<!-- Header Section -->
+	<div class="border-b border-gray-200 dark:border-gray-700 pb-4">
+		<h3 class="text-lg font-medium text-gray-900 dark:text-white">Workflow Synchronization</h3>
+		<p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+			Synchronize workflow pipelines from the local AIMbience workflows submodule to the AIMby API.
+			This process builds and deploys the latest workflow definitions.
+		</p>
+	</div>
+
+	<!-- Configuration Status -->
+	{#if aimbienceConfig}
+		<div class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
+			<div class="px-4 py-5 sm:px-6">
+				<h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">AIMbience Configuration Status</h3>
 			</div>
-
-			<p class="text-gray-600 dark:text-gray-400">
-				{$i18n.t(
-					'Sync workflows from the AIMBY repository and upload them to the pipeline service.'
-				)}
-			</p>
-
-			<!-- Sync Status -->
-			<div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-				<div class="flex items-center justify-between mb-2">
-					<span class="font-medium text-gray-900 dark:text-white">
-						{$i18n.t('Sync Status')}
-					</span>
-					{#if lastSyncTime}
-						<span class="text-sm text-gray-500 dark:text-gray-400">
-							{$i18n.t('Last sync')}: {new Date(lastSyncTime).toLocaleString()}
-						</span>
-					{/if}
-				</div>
-
-				<div class="flex items-center space-x-3">
-					{#if syncStatus === 'idle'}
-						<div class="w-3 h-3 bg-gray-400 rounded-full"></div>
-						<span class="text-gray-600 dark:text-gray-400">{$i18n.t('Ready to sync')}</span>
-					{:else if syncStatus === 'syncing'}
-						<div class="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-						<span class="text-blue-600 dark:text-blue-400">{$i18n.t('Syncing...')}</span>
-					{:else if syncStatus === 'success'}
-						<div class="w-3 h-3 bg-green-500 rounded-full"></div>
-						<span class="text-green-600 dark:text-green-400">{$i18n.t('Sync completed')}</span>
-					{:else if syncStatus === 'error'}
-						<div class="w-3 h-3 bg-red-500 rounded-full"></div>
-						<span class="text-red-600 dark:text-red-400">{$i18n.t('Sync failed')}</span>
-					{/if}
-				</div>
-
-				{#if syncMessage}
-					<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{syncMessage}</p>
-				{/if}
-			</div>
-
-			<!-- Tool Installation Status -->
-			<div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-				<div class="flex items-center justify-between mb-2">
-					<span class="font-medium text-gray-900 dark:text-white">
-						{$i18n.t('Tool Installation Status')}
-					</span>
-				</div>
-
-				<div class="flex items-center space-x-3">
-					{#if toolInstallStatus === 'idle'}
-						<div class="w-3 h-3 bg-gray-400 rounded-full"></div>
-						<span class="text-gray-600 dark:text-gray-400">{$i18n.t('Tool not installed')}</span>
-					{:else if toolInstallStatus === 'installing'}
-						<div class="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-						<span class="text-blue-600 dark:text-blue-400">{$i18n.t('Installing...')}</span>
-					{:else if toolInstallStatus === 'success'}
-						<div class="w-3 h-3 bg-green-500 rounded-full"></div>
-						<span class="text-green-600 dark:text-green-400">{$i18n.t('Tool installed')}</span>
-					{:else if toolInstallStatus === 'error'}
-						<div class="w-3 h-3 bg-red-500 rounded-full"></div>
-						<span class="text-red-600 dark:text-red-400">{$i18n.t('Installation failed')}</span>
-					{/if}
-				</div>
-
-				{#if toolInstallMessage}
-					<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{toolInstallMessage}</p>
-				{/if}
-			</div>
-
-			<!-- Tool Verification Status -->
-			<div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-				<div class="flex items-center justify-between mb-2">
-					<span class="font-medium text-gray-900 dark:text-white">
-						{$i18n.t('Tool Verification Status')}
-					</span>
-				</div>
-
-				<div class="flex items-center space-x-3">
-					{#if toolVerifyStatus === 'idle'}
-						<div class="w-3 h-3 bg-gray-400 rounded-full"></div>
-						<span class="text-gray-600 dark:text-gray-400">{$i18n.t('Tool not verified')}</span>
-					{:else if toolVerifyStatus === 'verifying'}
-						<div class="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-						<span class="text-blue-600 dark:text-blue-400">{$i18n.t('Verifying...')}</span>
-					{:else if toolVerifyStatus === 'success'}
-						<div class="w-3 h-3 bg-green-500 rounded-full"></div>
-						<span class="text-green-600 dark:text-green-400">{$i18n.t('Tool verified')}</span>
-					{:else if toolVerifyStatus === 'error'}
-						<div class="w-3 h-3 bg-red-500 rounded-full"></div>
-						<span class="text-red-600 dark:text-red-400">{$i18n.t('Verification failed')}</span>
-					{/if}
-				</div>
-
-				{#if toolVerifyMessage}
-					<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{toolVerifyMessage}</p>
-				{/if}
-			</div>
-
-			<!-- Action Buttons -->
-			<div class="flex space-x-3">
-				<button
-					type="button"
-					class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-					on:click={syncWorkflows}
-					disabled={syncStatus === 'syncing'}
-				>
-					{#if syncStatus === 'syncing'}
-						<span
-							class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"
-						></span>
-					{/if}
-					{$i18n.t('Sync Workflows')}
-				</button>
-
-				<button
-					type="button"
-					class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-					on:click={installTool}
-					disabled={toolInstallLoading}
-				>
-					{#if toolInstallLoading}
-						<span
-							class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"
-						></span>
-					{/if}
-					{$i18n.t('Install Tool')}
-				</button>
-
-				<button
-					type="button"
-					class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-					on:click={verifyTool}
-					disabled={toolVerifyLoading}
-				>
-					{#if toolVerifyLoading}
-						<span
-							class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"
-						></span>
-					{/if}
-					{$i18n.t('Verify Tool')}
-				</button>
-
-				<button
-					type="button"
-					class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-					on:click={clearHistory}
-				>
-					{$i18n.t('Clear History')}
-				</button>
+			<div class="border-t border-gray-200 dark:border-gray-700 px-4 py-5 sm:p-6">
+				<dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+					<div>
+						<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Integration Status</dt>
+						<dd class="mt-1 text-sm text-gray-900 dark:text-white">
+							{#if aimbienceConfig.ENABLE_AIMBENCE}
+								<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+									Enabled
+								</span>
+							{:else}
+								<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+									Disabled
+								</span>
+							{/if}
+						</dd>
+					</div>
+					<div>
+						<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">API Base URL</dt>
+						<dd class="mt-1 text-sm text-gray-900 dark:text-white">
+							{aimbienceConfig.AIMBENCE_API_BASE_URL || 'Not configured'}
+						</dd>
+					</div>
+					<div>
+						<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">API Key</dt>
+						<dd class="mt-1 text-sm text-gray-900 dark:text-white">
+							{aimbienceConfig.AIMBENCE_API_KEY ? 'Configured' : 'Not configured'}
+						</dd>
+					</div>
+					<div>
+						<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Timeout</dt>
+						<dd class="mt-1 text-sm text-gray-900 dark:text-white">
+							{aimbienceConfig.AIMBENCE_TIMEOUT || 30} seconds
+						</dd>
+					</div>
+				</dl>
 			</div>
 		</div>
+	{/if}
 
-		<!-- Advanced Settings -->
-		{#if showAdvancedSettings}
-			<div class="space-y-4 border-t pt-6">
-				<h4 class="text-md font-medium text-gray-900 dark:text-white">
-					{$i18n.t('Advanced Settings')}
-				</h4>
-
-				<!-- Environment Info -->
-				<div
-					class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4"
+	<!-- Sync Control Section -->
+	<div class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
+		<div class="px-4 py-5 sm:px-6">
+			<h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Synchronize Workflows</h3>
+			<p class="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
+				Click the button below to synchronize workflows from the local submodule to the AIMby API.
+				This will build and deploy the latest workflow pipeline definitions.
+			</p>
+		</div>
+		<div class="border-t border-gray-200 dark:border-gray-700 px-4 py-5 sm:p-6">
+			<div class="flex items-center space-x-4">
+				<button
+					type="button"
+					class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+					on:click={syncWorkflowsHandler}
+					disabled={loading || !aimbienceConfig?.ENABLE_AIMBENCE}
 				>
-					<div class="flex items-center space-x-2 mb-2">
-						<span class="text-sm font-medium text-blue-800 dark:text-blue-200">
-							{$i18n.t('Environment')}:
-						</span>
-						<span class="text-sm text-blue-600 dark:text-blue-300 capitalize">
-							{environment}
-						</span>
+					{#if loading}
+						<span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></span>
+						Synchronizing...
+					{:else}
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+						</svg>
+						Sync Workflows
+					{/if}
+				</button>
+
+				{#if lastSyncTime}
+					<div class="text-sm text-gray-500 dark:text-gray-400">
+						Last sync: {formatTimestamp(lastSyncTime)}
 					</div>
-					<p class="text-xs text-blue-600 dark:text-blue-300">
-						{$i18n.t('Detected environment for optimal URL selection')}
+				{/if}
+			</div>
+
+			{#if syncStatus !== 'idle'}
+				<div class="mt-4">
+					<div class="rounded-md p-4 {syncStatus === 'success' ? 'bg-green-50 dark:bg-green-900' : syncStatus === 'error' ? 'bg-red-50 dark:bg-red-900' : 'bg-blue-50 dark:bg-blue-900'}">
+						<div class="flex">
+							<div class="flex-shrink-0">
+								{#if syncStatus === 'success'}
+									<svg class="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+										<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+									</svg>
+								{:else if syncStatus === 'error'}
+									<svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+										<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+									</svg>
+								{:else}
+									<svg class="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+										<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+									</svg>
+								{/if}
+							</div>
+							<div class="ml-3">
+								<p class="text-sm font-medium {syncStatus === 'success' ? 'text-green-800 dark:text-green-200' : syncStatus === 'error' ? 'text-red-800 dark:text-red-200' : 'text-blue-800 dark:text-blue-200'}">
+									{syncMessage}
+								</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			{/if}
+		</div>
+	</div>
+
+	<!-- Sync History Section -->
+	{#if syncHistory.length > 0}
+		<div class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
+			<div class="px-4 py-5 sm:px-6 flex justify-between items-center">
+				<div>
+					<h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white">Sync History</h3>
+					<p class="mt-1 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
+						Recent workflow synchronization attempts and their results.
 					</p>
 				</div>
-
-				<!-- URL Configuration -->
-				<div class="space-y-3">
-					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300">
-						{$i18n.t('AIMBY API URL')}
-					</label>
-
-					<!-- URL Presets -->
-					<div class="space-y-2">
-						{#each availableUrls as urlOption}
-							<label
-								class="flex items-start space-x-3 p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-							>
-								<input
-									type="radio"
-									name="apiUrl"
-									value={urlOption.url}
-									checked={aimbyApiUrl === urlOption.url}
-									on:change={() => {
-										if (urlOption.url) {
-											aimbyApiUrl = urlOption.url;
-										}
-									}}
-									class="mt-1"
-								/>
-								<div class="flex-1">
-									<div class="text-sm font-medium text-gray-900 dark:text-white">
-										{urlOption.label}
+				<button
+					type="button"
+					class="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+					on:click={clearHistory}
+				>
+					Clear History
+				</button>
+			</div>
+			<div class="border-t border-gray-200 dark:border-gray-700">
+				<ul class="divide-y divide-gray-200 dark:divide-gray-700">
+					{#each syncHistory as entry, index}
+						<li class="px-4 py-4">
+							<div class="flex items-center justify-between">
+								<div class="flex items-center">
+									<div class="flex-shrink-0">
+										<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-{getStatusType(entry.status)}-100 text-{getStatusType(entry.status)}-800 dark:bg-{getStatusType(entry.status)}-900 dark:text-{getStatusType(entry.status)}-200">
+											{entry.status}
+										</span>
 									</div>
-									<div class="text-xs text-gray-500 dark:text-gray-400">
-										{urlOption.description}
-									</div>
-									{#if urlOption.url}
-										<div class="text-xs text-gray-400 dark:text-gray-500 font-mono">
-											{urlOption.url}
+									<div class="ml-4">
+										<div class="text-sm font-medium text-gray-900 dark:text-white">
+											{entry.message}
 										</div>
-									{/if}
+										<div class="text-sm text-gray-500 dark:text-gray-400">
+											{formatTimestamp(entry.timestamp)}
+										</div>
+										{#if entry.config}
+											<div class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+												API: {entry.config.api_url} | Timeout: {entry.config.timeout}s
+											</div>
+										{/if}
+									</div>
 								</div>
-							</label>
-						{/each}
-					</div>
-
-					<!-- Custom URL Input -->
-					<div class="mt-4">
-						<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-							{$i18n.t('Custom URL (if needed)')}
-						</label>
-						<input
-							type="url"
-							bind:value={aimbyApiUrl}
-							class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-							placeholder="https://your-custom-api-url.com"
-						/>
-					</div>
-				</div>
-
-				<!-- Timeout Configuration -->
-				<div>
-					<label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-						{$i18n.t('Timeout (seconds)')}
-					</label>
-					<input
-						type="number"
-						bind:value={timeoutSeconds}
-						min="5"
-						max="300"
-						class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-					/>
-					<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-						{$i18n.t('Maximum time to wait for API response')}
-					</div>
-				</div>
-
-				<!-- Test Connection Button -->
-				<div class="flex space-x-3">
-					<button
-						type="button"
-						class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-						on:click={saveSettings}
-					>
-						{$i18n.t('Save Settings')}
-					</button>
-
-					<button
-						type="button"
-						class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-						on:click={testConnection}
-					>
-						{$i18n.t('Test Connection')}
-					</button>
-				</div>
-			</div>
-		{/if}
-
-		<!-- Sync History -->
-		{#if syncHistory.length > 0}
-			<div class="space-y-4 border-t pt-6">
-				<h4 class="text-md font-medium text-gray-900 dark:text-white">
-					{$i18n.t('Sync History')}
-				</h4>
-
-				<div class="space-y-2 max-h-64 overflow-y-auto">
-					{#each syncHistory as entry}
-						<div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-3">
-							<div class="flex items-center justify-between mb-1">
-								<span class="text-sm font-medium text-gray-900 dark:text-white">
-									{new Date(entry.timestamp).toLocaleString()}
-								</span>
-								<span
-									class="text-xs px-2 py-1 rounded-full {entry.status === 'success'
-										? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-										: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'}"
-								>
-									{entry.status}
-								</span>
 							</div>
-							<p class="text-sm text-gray-600 dark:text-gray-400">{entry.message}</p>
-						</div>
+						</li>
 					{/each}
-				</div>
+				</ul>
 			</div>
-		{/if}
-	</div>
-
-	<!-- Save Button -->
-	<div class="flex justify-end pt-4 border-t">
-		<button
-			type="button"
-			class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-			on:click={() => {
-				saveSettings();
-				if (saveHandler) saveHandler();
-			}}
-		>
-			{$i18n.t('Save All Settings')}
-		</button>
-	</div>
+		</div>
+	{/if}
 </div>

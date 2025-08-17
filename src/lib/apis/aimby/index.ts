@@ -69,10 +69,10 @@ export const getBatchesViaProxy = async (
 			} catch {
 				errorData = { detail: res.statusText };
 			}
-			
+
 			// Provide more specific error messages based on status code
 			let errorMessage = errorData.detail || res.statusText;
-			
+
 			if (res.status === 401) {
 				errorMessage = 'Authentication failed. Please check your API key and try again.';
 			} else if (res.status === 403) {
@@ -82,10 +82,10 @@ export const getBatchesViaProxy = async (
 			} else if (res.status === 500) {
 				errorMessage = 'Server error. Please try again later or contact support.';
 			}
-			
+
 			error = errorMessage;
 			console.error('API error:', res.status, errorMessage);
-			
+
 			// Throw error with more context for better handling in components
 			throw new Error(`HTTP ${res.status}: ${errorMessage}`);
 		}
@@ -126,10 +126,10 @@ export const getFileAuditViaProxy = async (
 			} catch {
 				errorData = { detail: res.statusText };
 			}
-			
+
 			// Provide more specific error messages based on status code
 			let errorMessage = errorData.detail || res.statusText;
-			
+
 			if (res.status === 401) {
 				errorMessage = 'Authentication failed. Please check your API key and try again.';
 			} else if (res.status === 403) {
@@ -139,10 +139,10 @@ export const getFileAuditViaProxy = async (
 			} else if (res.status === 500) {
 				errorMessage = 'Server error. Please try again later or contact support.';
 			}
-			
+
 			error = errorMessage;
 			console.error('API error:', res.status, errorMessage);
-			
+
 			// Throw error with more context for better handling in components
 			throw new Error(`HTTP ${res.status}: ${errorMessage}`);
 		}
@@ -183,10 +183,10 @@ export const getBatchDetailsViaProxy = async (
 			} catch {
 				errorData = { detail: res.statusText };
 			}
-			
+
 			// Provide more specific error messages based on status code
 			let errorMessage = errorData.detail || res.statusText;
-			
+
 			if (res.status === 401) {
 				errorMessage = 'Authentication failed. Please check your API key and try again.';
 			} else if (res.status === 403) {
@@ -196,10 +196,10 @@ export const getBatchDetailsViaProxy = async (
 			} else if (res.status === 500) {
 				errorMessage = 'Server error. Please try again later or contact support.';
 			}
-			
+
 			error = errorMessage;
 			console.error('API error:', res.status, errorMessage);
-			
+
 			// Throw error with more context for better handling in components
 			throw new Error(`HTTP ${res.status}: ${errorMessage}`);
 		}
