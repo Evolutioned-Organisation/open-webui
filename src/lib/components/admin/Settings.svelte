@@ -23,7 +23,6 @@
 	import Evaluations from './Settings/Evaluations.svelte';
 	import CodeExecution from './Settings/CodeExecution.svelte';
 	import Tools from './Settings/Tools.svelte';
-	
 
 	const i18n = getContext('i18n');
 
@@ -45,8 +44,8 @@
 			'interface',
 			'audio',
 			'images',
-					'pipelines',
-		'db'
+			'pipelines',
+			'db'
 		].includes(tabFromPath)
 			? tabFromPath
 			: 'general';
@@ -432,8 +431,6 @@
 			</div>
 			<div class=" self-center">{$i18n.t('Database')}</div>
 		</button>
-
-
 	</div>
 
 	<div class="flex-1 mt-3 lg:mt-0 overflow-y-scroll pr-1 scrollbar-hidden">
@@ -515,7 +512,6 @@
 					toast.success($i18n.t('Settings saved successfully!'));
 				}}
 			/>
-
 		{/if}
 	</div>
 </div>

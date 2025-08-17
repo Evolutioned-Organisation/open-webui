@@ -2,6 +2,7 @@
 	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { getAimbienceConfig, updateAimbienceConfig } from '$lib/apis/auths';
+	import { WEBUI_API_BASE_URL } from '$lib/constants';
 
 	const i18n = getContext('i18n');
 
@@ -80,7 +81,8 @@
 			console.log('Token length:', localStorage.token?.length || 0);
 
 			// Test through Open WebUI proxy to avoid CORS issues
-			const proxyUrl = `/api/v1/auths/admin/aimbience/proxy/health`;
+			// Use the proper WEBUI_API_BASE_URL constant to ensure correct backend URL
+			const proxyUrl = `${WEBUI_API_BASE_URL}/auths/admin/aimbience/proxy/health`;
 			console.log('Using proxy URL:', proxyUrl);
 			console.log('API Key provided:', aimbienceConfig.AIMBENCE_API_KEY ? 'Yes' : 'No');
 

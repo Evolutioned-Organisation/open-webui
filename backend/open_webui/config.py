@@ -871,7 +871,7 @@ CACHE_DIR.mkdir(parents=True, exist_ok=True)
 ENABLE_DIRECT_CONNECTIONS = PersistentConfig(
     "ENABLE_DIRECT_CONNECTIONS",
     "direct.enable",
-    os.environ.get("ENABLE_DIRECT_CONNECTIONS", "False").lower() == "true",
+    os.environ.get("ENABLE_DIRECT_CONNECTIONS", "True").lower() == "true",
 )
 
 ####################################
@@ -1567,7 +1567,7 @@ FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
 DEFAULT_FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = """### Task:
 Suggest 3-5 relevant follow-up questions or prompts that the user might naturally ask next in this conversation as a **user**, based on the chat history, to help continue or deepen the discussion.
 ### Guidelines:
-- Write all follow-up questions from the user’s point of view, directed to the assistant.
+- Write all follow-up questions from the user's point of view, directed to the assistant.
 - Make questions concise, clear, and directly related to the discussed topic(s).
 - Only suggest follow-ups that make sense given the chat content and do not repeat what was already covered.
 - If the conversation is very short or not specific, suggest more general (but relevant) follow-ups the user might ask.
@@ -3344,4 +3344,38 @@ LDAP_ATTRIBUTE_FOR_GROUPS = PersistentConfig(
     "LDAP_ATTRIBUTE_FOR_GROUPS",
     "ldap.server.attribute_for_groups",
     os.environ.get("LDAP_ATTRIBUTE_FOR_GROUPS", "memberOf"),
+)
+
+####################################
+# Aimbience
+####################################
+
+ENABLE_AIMBENCE = PersistentConfig(
+    "ENABLE_AIMBENCE",
+    "aimbience.enable",
+    os.environ.get("ENABLE_AIMBENCE", "false").lower() == "true",
+)
+
+AIMBENCE_API_BASE_URL = PersistentConfig(
+    "AIMBENCE_API_BASE_URL",
+    "aimbience.api.base_url",
+    os.environ.get("AIMBENCE_API_BASE_URL", "http://localhost:8000"),
+)
+
+AIMBENCE_API_KEY = PersistentConfig(
+    "AIMBENCE_API_KEY",
+    "aimbience.api.key",
+    os.environ.get("AIMBENCE_API_KEY", ""),
+)
+
+AIMBENCE_TIMEOUT = PersistentConfig(
+    "AIMBENCE_TIMEOUT",
+    "aimbience.api.timeout",
+    int(os.environ.get("AIMBENCE_TIMEOUT", "30")),
+)
+
+AIMBENCE_BATCH_SIZE = PersistentConfig(
+    "AIMBENCE_BATCH_SIZE",
+    "aimbience.api.batch_size",
+    int(os.environ.get("AIMBENCE_BATCH_SIZE", "10")),
 )

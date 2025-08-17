@@ -28,5 +28,27 @@ export default defineConfig({
 	},
 	esbuild: {
 		pure: process.env.ENV === 'dev' ? [] : ['console.log', 'console.debug']
+	},
+	server: {
+		proxy: {
+			// Proxy API calls to the backend server
+			'/api': {
+				target: 'http://localhost:8000',
+				changeOrigin: true,
+				secure: false,
+				rewrite: (path) => path
+			},
+			// Proxy other backend routes
+			'/ollama': {
+				target: 'http://localhost:8000',
+				changeOrigin: true,
+				secure: false
+			},
+			'/openai': {
+				target: 'http://localhost:8000',
+				changeOrigin: true,
+				secure: false
+			}
+		}
 	}
 });
