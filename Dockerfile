@@ -29,11 +29,21 @@ WORKDIR /app
 # to store git revision in build
 RUN apk add --no-cache git
 
+# Set Node.js memory limit to prevent heap out of memory during build
+ENV NODE_OPTIONS="--max-old-space-size=8192 --max-semi-space-size=512"
+ENV NPM_CONFIG_CACHE=/tmp/.npm
+ENV NPM_CONFIG_PREFER_OFFLINE=true
+
 COPY package.json package-lock.json ./
 RUN npm ci --force
 
 COPY . .
 ENV APP_BUILD_HASH=${BUILD_HASH}
+
+# Clean up unnecessary files to reduce build context and memory usage
+RUN rm -rf .git .github docs tests cypress .vscode .idea
+
+# Run build with optimized memory settings
 RUN npm run build
 
 ######## WebUI backend ########

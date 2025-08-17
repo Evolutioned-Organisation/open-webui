@@ -21,7 +21,19 @@ export default defineConfig({
 		APP_BUILD_HASH: JSON.stringify(process.env.APP_BUILD_HASH || 'dev-build')
 	},
 	build: {
-		sourcemap: true
+		sourcemap: true,
+		// Memory optimization for large builds
+		chunkSizeWarningLimit: 2000,
+		rollupOptions: {
+			output: {
+				manualChunks: {
+					// Split vendor chunks to reduce memory usage
+					vendor: ['svelte', '@sveltejs/kit'],
+					ui: ['@tiptap/core', '@tiptap/starter-kit', '@tiptap/extensions'],
+					utils: ['dayjs', 'fuse.js', 'dompurify']
+				}
+			}
+		}
 	},
 	worker: {
 		format: 'es'
