@@ -26,18 +26,34 @@
 	async function fetchBatches() {
 		loading = true;
 		try {
-			const token = localStorage.token || '';
+			// Check if we have a token
+			if (!localStorage.token) {
+				toast.error('Authentication required. Please log in again.');
+				return;
+			}
+
+			const token = localStorage.token;
 			const response = await getBatchesViaProxy(token, selectedCount);
 			if (response) {
 				batches = response.batches;
 				totalCount = response.total_count;
 				toast.success(`Retrieved ${batches.length} batches`);
 			} else {
-				toast.error('Failed to retrieve batches');
+				toast.error('Failed to retrieve batches. Please check your connection and try again.');
 			}
 		} catch (error) {
 			console.error('Error fetching batches:', error);
-			toast.error('Error fetching batches');
+			
+			// Provide more specific error messages based on error type
+			let errorMessage = 'Error fetching batches';
+			
+			if (error instanceof TypeError && error.message.includes('fetch')) {
+				errorMessage = 'Network error - check if the Open WebUI backend is accessible';
+			} else if (error.message) {
+				errorMessage = error.message;
+			}
+			
+			toast.error(errorMessage);
 		} finally {
 			loading = false;
 		}
@@ -46,17 +62,33 @@
 	async function fetchBatchDetails(batchId: string) {
 		loadingDetails = true;
 		try {
-			const token = localStorage.token || '';
+			// Check if we have a token
+			if (!localStorage.token) {
+				toast.error('Authentication required. Please log in again.');
+				return;
+			}
+
+			const token = localStorage.token;
 			const details = await getBatchDetailsViaProxy(token, batchId);
 			if (details) {
 				batchDetails = details;
 				toast.success('Batch details retrieved successfully');
 			} else {
-				toast.error('Failed to retrieve batch details');
+				toast.error('Failed to retrieve batch details. Please check your connection and try again.');
 			}
 		} catch (error) {
 			console.error('Error fetching batch details:', error);
-			toast.error('Error fetching batch details');
+			
+			// Provide more specific error messages based on error type
+			let errorMessage = 'Error fetching batch details';
+			
+			if (error instanceof TypeError && error.message.includes('fetch')) {
+				errorMessage = 'Network error - check if the Open WebUI backend is accessible';
+			} else if (error.message) {
+				errorMessage = error.message;
+			}
+			
+			toast.error(errorMessage);
 		} finally {
 			loadingDetails = false;
 		}
@@ -101,18 +133,34 @@
 
 		loadingFileAudit = true;
 		try {
-			const token = localStorage.token || '';
+			// Check if we have a token
+			if (!localStorage.token) {
+				toast.error('Authentication required. Please log in again.');
+				return;
+			}
+
+			const token = localStorage.token;
 			const result = await getFileAuditViaProxy(token, filename.trim());
 			if (result) {
 				fileAuditResult = result;
 				toast.success('File audit completed successfully');
 			} else {
-				toast.error('Failed to audit file');
+				toast.error('Failed to audit file. Please check your connection and try again.');
 				fileAuditResult = null;
 			}
 		} catch (error) {
 			console.error('Error auditing file:', error);
-			toast.error('Error auditing file');
+			
+			// Provide more specific error messages based on error type
+			let errorMessage = 'Error auditing file';
+			
+			if (error instanceof TypeError && error.message.includes('fetch')) {
+				errorMessage = 'Network error - check if the Open WebUI backend is accessible';
+			} else if (error.message) {
+				errorMessage = error.message;
+			}
+			
+			toast.error(errorMessage);
 			fileAuditResult = null;
 		} finally {
 			loadingFileAudit = false;

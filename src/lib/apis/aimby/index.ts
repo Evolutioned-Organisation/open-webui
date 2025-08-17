@@ -1,3 +1,5 @@
+import { WEBUI_API_BASE_URL } from '$lib/constants';
+
 export interface BatchListItem {
 	batch_id: string;
 	creation_date: string;
@@ -46,8 +48,8 @@ export const getBatchesViaProxy = async (
 	let error = null;
 
 	try {
-		// Use relative path - Vite will proxy this to the backend
-		const apiUrl = `/api/v1/auths/admin/aimbience/proxy/api/v1/audit/batches?count=${count}`;
+		// Use the proper WEBUI_API_BASE_URL constant to ensure correct backend URL
+		const apiUrl = `${WEBUI_API_BASE_URL}/auths/admin/aimbience/proxy/api/v1/audit/batches?count=${count}`;
 
 		console.log('Fetching batches from:', apiUrl);
 
@@ -61,17 +63,38 @@ export const getBatchesViaProxy = async (
 		});
 
 		if (!res.ok) {
-			const errorData = await res.json().catch(() => ({ detail: res.statusText }));
-			error = errorData.detail || res.statusText;
-			console.error('API error:', res.status, error);
-			return null;
+			let errorData;
+			try {
+				errorData = await res.json();
+			} catch {
+				errorData = { detail: res.statusText };
+			}
+			
+			// Provide more specific error messages based on status code
+			let errorMessage = errorData.detail || res.statusText;
+			
+			if (res.status === 401) {
+				errorMessage = 'Authentication failed. Please check your API key and try again.';
+			} else if (res.status === 403) {
+				errorMessage = 'Access denied. You may not have permission to view this resource.';
+			} else if (res.status === 404) {
+				errorMessage = 'Resource not found. The requested endpoint may not exist.';
+			} else if (res.status === 500) {
+				errorMessage = 'Server error. Please try again later or contact support.';
+			}
+			
+			error = errorMessage;
+			console.error('API error:', res.status, errorMessage);
+			
+			// Throw error with more context for better handling in components
+			throw new Error(`HTTP ${res.status}: ${errorMessage}`);
 		}
 
 		return await res.json();
 	} catch (err) {
 		console.error('Network error:', err);
-		error = err.detail || err.message;
-		return null;
+		// Re-throw the error so components can handle it properly
+		throw err;
 	}
 };
 
@@ -82,8 +105,8 @@ export const getFileAuditViaProxy = async (
 	let error = null;
 
 	try {
-		// Use relative path - Vite will proxy this to the backend
-		const apiUrl = `/api/v1/auths/admin/aimbience/proxy/api/v1/audit/file/${filename}`;
+		// Use the proper WEBUI_API_BASE_URL constant to ensure correct backend URL
+		const apiUrl = `${WEBUI_API_BASE_URL}/auths/admin/aimbience/proxy/api/v1/audit/file/${filename}`;
 
 		console.log('Fetching file audit from:', apiUrl);
 
@@ -97,17 +120,38 @@ export const getFileAuditViaProxy = async (
 		});
 
 		if (!res.ok) {
-			const errorData = await res.json().catch(() => ({ detail: res.statusText }));
-			error = errorData.detail || res.statusText;
-			console.error('API error:', res.status, error);
-			return null;
+			let errorData;
+			try {
+				errorData = await res.json();
+			} catch {
+				errorData = { detail: res.statusText };
+			}
+			
+			// Provide more specific error messages based on status code
+			let errorMessage = errorData.detail || res.statusText;
+			
+			if (res.status === 401) {
+				errorMessage = 'Authentication failed. Please check your API key and try again.';
+			} else if (res.status === 403) {
+				errorMessage = 'Access denied. You may not have permission to view this resource.';
+			} else if (res.status === 404) {
+				errorMessage = 'File audit not found. The requested file may not exist.';
+			} else if (res.status === 500) {
+				errorMessage = 'Server error. Please try again later or contact support.';
+			}
+			
+			error = errorMessage;
+			console.error('API error:', res.status, errorMessage);
+			
+			// Throw error with more context for better handling in components
+			throw new Error(`HTTP ${res.status}: ${errorMessage}`);
 		}
 
 		return await res.json();
 	} catch (err) {
 		console.error('Network error:', err);
-		error = err.detail || err.message;
-		return null;
+		// Re-throw the error so components can handle it properly
+		throw err;
 	}
 };
 
@@ -118,8 +162,8 @@ export const getBatchDetailsViaProxy = async (
 	let error = null;
 
 	try {
-		// Use relative path - Vite will proxy this to the backend
-		const apiUrl = `/api/v1/auths/admin/aimbience/proxy/api/v1/audit/batch/${batchId}`;
+		// Use the proper WEBUI_API_BASE_URL constant to ensure correct backend URL
+		const apiUrl = `${WEBUI_API_BASE_URL}/auths/admin/aimbience/proxy/api/v1/audit/batch/${batchId}`;
 
 		console.log('Fetching batch details from:', apiUrl);
 
@@ -133,16 +177,37 @@ export const getBatchDetailsViaProxy = async (
 		});
 
 		if (!res.ok) {
-			const errorData = await res.json().catch(() => ({ detail: res.statusText }));
-			error = errorData.detail || res.statusText;
-			console.error('API error:', res.status, error);
-			return null;
+			let errorData;
+			try {
+				errorData = await res.json();
+			} catch {
+				errorData = { detail: res.statusText };
+			}
+			
+			// Provide more specific error messages based on status code
+			let errorMessage = errorData.detail || res.statusText;
+			
+			if (res.status === 401) {
+				errorMessage = 'Authentication failed. Please check your API key and try again.';
+			} else if (res.status === 403) {
+				errorMessage = 'Access denied. You may not have permission to view this resource.';
+			} else if (res.status === 404) {
+				errorMessage = 'Batch not found. The requested batch may not exist.';
+			} else if (res.status === 500) {
+				errorMessage = 'Server error. Please try again later or contact support.';
+			}
+			
+			error = errorMessage;
+			console.error('API error:', res.status, errorMessage);
+			
+			// Throw error with more context for better handling in components
+			throw new Error(`HTTP ${res.status}: ${errorMessage}`);
 		}
 
 		return await res.json();
 	} catch (err) {
 		console.error('Network error:', err);
-		error = err.detail || err.message;
-		return null;
+		// Re-throw the error so components can handle it properly
+		throw err;
 	}
 };

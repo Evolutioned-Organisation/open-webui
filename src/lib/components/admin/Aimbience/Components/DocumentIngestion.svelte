@@ -106,16 +106,35 @@
 	const fetchBatches = async () => {
 		loading = true;
 		try {
+			// Check if we have a token
+			if (!localStorage.token) {
+				toast.error('Authentication required. Please log in again.');
+				return;
+			}
+
 			// Use proxy function to avoid CORS issues
-			const response = await getBatchesViaProxy(localStorage.token || '', count);
+			const response = await getBatchesViaProxy(localStorage.token, count);
 			if (response) {
 				batches = response.batches;
 				totalCount = response.total_count;
 				toast.success(`Retrieved ${batches.length} batches`);
+			} else {
+				// Handle case where response is null (usually means an error occurred)
+				toast.error('Failed to retrieve batches. Please check your connection and try again.');
 			}
 		} catch (error) {
 			console.error('Error fetching batches:', error);
-			toast.error('Failed to fetch batches');
+			
+			// Provide more specific error messages based on error type
+			let errorMessage = 'Failed to fetch batches';
+			
+			if (error instanceof TypeError && error.message.includes('fetch')) {
+				errorMessage = 'Network error - check if the Open WebUI backend is accessible';
+			} else if (error.message) {
+				errorMessage = `Error: ${error.message}`;
+			}
+			
+			toast.error(errorMessage);
 		} finally {
 			loading = false;
 		}
