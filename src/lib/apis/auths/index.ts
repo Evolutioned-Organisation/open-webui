@@ -775,13 +775,15 @@ export const syncWorkflows = async (token: string, options: any = {}) => {
 			} catch {
 				errorData = { detail: res.statusText };
 			}
-			
+
 			// Create a more detailed error object
-			const detailedError = new Error(`HTTP ${res.status}: ${errorData.detail?.message || errorData.detail || res.statusText}`);
+			const detailedError = new Error(
+				`HTTP ${res.status}: ${errorData.detail?.message || errorData.detail || res.statusText}`
+			);
 			detailedError.detail = errorData.detail;
 			detailedError.status = res.status;
 			detailedError.statusText = res.statusText;
-			
+
 			throw detailedError;
 		}
 
