@@ -1228,7 +1228,7 @@ async def sync_workflows(
             )
         
         # Build the target URL for workflow sync
-        target_url = f"{base_url}/api/v1/sync/workflows"
+        target_url = f"{base_url}/workflows"
         
         # Get the request body (if any additional parameters are passed)
         body = await request.body()
