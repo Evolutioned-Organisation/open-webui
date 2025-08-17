@@ -1279,7 +1279,7 @@ async def sync_workflows(
                     error_detail = {
                         "error": "AIMby API Error",
                         "http_status": response.status_code,
-                        "http_status_text": response.status_text,
+                        "http_status_text": response.reason_phrase,  # Fixed: use reason_phrase instead of status_text
                         "target_url": target_url,
                         "request_data": request_data,
                         "response_headers": dict(response.headers),
@@ -1372,7 +1372,7 @@ async def sync_workflows(
             except httpx.HTTPStatusError as e:
                 error_detail = {
                     "error": "HTTP Status Error",
-                    "message": f"HTTP {e.response.status_code}: {e.response.status_text}",
+                    "message": f"HTTP {e.response.status_code}: {e.response.reason_phrase}",  # Fixed: use reason_phrase
                     "target_url": target_url,
                     "request_data": request_data,
                     "response_headers": dict(e.response.headers),
