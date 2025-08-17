@@ -15,6 +15,8 @@
 	let syncHistory = [];
 	let aimbienceConfig = null;
 	let loading = false;
+	let showErrorDetails = false;
+	let currentError = null;
 
 	// Load settings and history on mount
 	onMount(async () => {
@@ -112,8 +114,36 @@
 			lastSyncTime = new Date().toISOString();
 			syncStatus = 'error';
 			
+			// Capture detailed error information
+			currentError = {
+				message: error.message || 'Unknown error occurred',
+				details: null,
+				suggestions: [],
+				technical_info: {}
+			};
+			
+			// Try to extract detailed error information from the response
+			if (error.detail) {
+				if (typeof error.detail === 'object') {
+					currentError.details = error.detail;
+					currentError.message = error.detail.message || error.detail.error || error.message;
+					currentError.suggestions = error.detail.suggestions || [];
+					currentError.technical_info = {
+						error_type: error.detail.error,
+						http_status: error.detail.http_status,
+						http_status_text: error.detail.http_status_text,
+						target_url: error.detail.target_url,
+						request_data: error.detail.request_data,
+						response_headers: error.detail.response_headers,
+						response_content: error.detail.response_content
+					};
+				} else {
+					currentError.message = error.detail;
+				}
+			}
+			
 			// Provide more specific error messages based on error type
-			let errorMessage = 'Workflow synchronization failed';
+			let errorMessage = currentError.message;
 			
 			if (error.message) {
 				if (error.message.includes('401')) {
@@ -124,8 +154,12 @@
 					errorMessage = 'Server error during workflow sync. Please try again later.';
 				} else if (error.message.includes('timeout')) {
 					errorMessage = 'Workflow sync timed out. Please check your AIMbience API connection.';
-				} else {
-					errorMessage = `Workflow sync failed: ${error.message}`;
+				} else if (error.message.includes('Configuration Error')) {
+					errorMessage = 'AIMbience configuration error. Please check your settings.';
+				} else if (error.message.includes('Connection Error')) {
+					errorMessage = 'Connection failed. Please check if the AIMby API server is accessible.';
+				} else if (error.message.includes('Timeout Error')) {
+					errorMessage = 'Request timed out. The AIMby API server may be slow or overloaded.';
 				}
 			}
 			
@@ -137,6 +171,7 @@
 				status: 'error',
 				message: errorMessage,
 				error: error.message,
+				error_details: currentError,
 				config: {
 					api_url: aimbienceConfig?.AIMBENCE_API_BASE_URL,
 					timeout: aimbienceConfig?.AIMBENCE_TIMEOUT
@@ -145,7 +180,7 @@
 			
 			syncHistory.unshift(historyEntry);
 			if (syncHistory.length > 10) {
-				syncHistory = syncHistory.slice(0, 10);
+				syncHistory.slice(0, 10);
 			}
 			saveSyncHistory();
 			
@@ -274,7 +309,7 @@
 			</div>
 
 			{#if syncStatus !== 'idle'}
-				<div class="mt-4">
+				<div class="mt-4" data-error-section>
 					<div class="rounded-md p-4 {syncStatus === 'success' ? 'bg-green-50 dark:bg-green-900' : syncStatus === 'error' ? 'bg-red-50 dark:bg-red-900' : 'bg-blue-50 dark:bg-blue-900'}">
 						<div class="flex">
 							<div class="flex-shrink-0">
@@ -292,10 +327,81 @@
 									</svg>
 								{/if}
 							</div>
-							<div class="ml-3">
+							<div class="ml-3 flex-1">
 								<p class="text-sm font-medium {syncStatus === 'success' ? 'text-green-800 dark:text-green-200' : syncStatus === 'error' ? 'text-red-800 dark:text-red-200' : 'text-blue-800 dark:text-blue-200'}">
 									{syncMessage}
 								</p>
+								
+								{#if syncStatus === 'error' && currentError && (currentError.suggestions?.length > 0 || currentError.technical_info)}
+									<div class="mt-3">
+										<button
+											type="button"
+											class="text-sm text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline"
+											on:click={() => showErrorDetails = !showErrorDetails}
+										>
+											{showErrorDetails ? 'Hide' : 'Show'} Technical Details
+										</button>
+										
+										{#if showErrorDetails}
+											<div class="mt-3 space-y-3">
+												<!-- Suggestions -->
+												{#if currentError.suggestions?.length > 0}
+													<div>
+														<h4 class="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Troubleshooting Suggestions:</h4>
+														<ul class="list-disc list-inside space-y-1">
+															{#each currentError.suggestions as suggestion}
+																<li class="text-sm text-red-700 dark:text-red-300">{suggestion}</li>
+															{/each}
+														</ul>
+													</div>
+												{/if}
+												
+												<!-- Technical Information -->
+												{#if currentError.technical_info && Object.keys(currentError.technical_info).length > 0}
+													<div>
+														<h4 class="text-sm font-medium text-red-800 dark:text-red-200 mb-2">Technical Information:</h4>
+														<div class="bg-red-100 dark:bg-red-900/30 rounded p-3 space-y-2">
+															{#if currentError.technical_info.error_type}
+																<div class="text-xs">
+																	<span class="font-medium">Error Type:</span> 
+																	<span class="font-mono">{currentError.technical_info.error_type}</span>
+																</div>
+															{/if}
+															
+															{#if currentError.technical_info.http_status}
+																<div class="text-xs">
+																	<span class="font-medium">HTTP Status:</span> 
+																	<span class="font-mono">{currentError.technical_info.http_status} {currentError.technical_info.http_status_text || ''}</span>
+																</div>
+															{/if}
+															
+															{#if currentError.technical_info.target_url}
+																<div class="text-xs">
+																	<span class="font-medium">Target URL:</span> 
+																	<span class="font-mono break-all">{currentError.technical_info.target_url}</span>
+																</div>
+															{/if}
+															
+															{#if currentError.technical_info.request_data && Object.keys(currentError.technical_info.request_data).length > 0}
+																<div class="text-xs">
+																	<span class="font-medium">Request Data:</span> 
+																	<pre class="font-mono text-xs mt-1 bg-red-200 dark:bg-red-800 p-2 rounded overflow-x-auto">{JSON.stringify(currentError.technical_info.request_data, null, 2)}</pre>
+																</div>
+															{/if}
+															
+															{#if currentError.technical_info.response_content}
+																<div class="text-xs">
+																	<span class="font-medium">Response Content:</span> 
+																	<pre class="font-mono text-xs mt-1 bg-red-200 dark:bg-red-800 p-2 rounded overflow-x-auto">{typeof currentError.technical_info.response_content === 'string' ? currentError.technical_info.response_content : JSON.stringify(currentError.technical_info.response_content, null, 2)}</pre>
+																</div>
+															{/if}
+														</div>
+													</div>
+												{/if}
+											</div>
+										{/if}
+									</div>
+								{/if}
 							</div>
 						</div>
 					</div>
@@ -327,13 +433,13 @@
 					{#each syncHistory as entry, index}
 						<li class="px-4 py-4">
 							<div class="flex items-center justify-between">
-								<div class="flex items-center">
+								<div class="flex items-center flex-1">
 									<div class="flex-shrink-0">
 										<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-{getStatusType(entry.status)}-100 text-{getStatusType(entry.status)}-800 dark:bg-{getStatusType(entry.status)}-900 dark:text-{getStatusType(entry.status)}-200">
 											{entry.status}
 										</span>
 									</div>
-									<div class="ml-4">
+									<div class="ml-4 flex-1">
 										<div class="text-sm font-medium text-gray-900 dark:text-white">
 											{entry.message}
 										</div>
@@ -343,6 +449,29 @@
 										{#if entry.config}
 											<div class="text-xs text-gray-400 dark:text-gray-500 mt-1">
 												API: {entry.config.api_url} | Timeout: {entry.config.timeout}s
+											</div>
+										{/if}
+										
+										<!-- Error Details for Failed Syncs -->
+										{#if entry.status === 'error' && entry.error_details}
+											<div class="mt-2">
+												<button
+													type="button"
+													class="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline"
+													on:click={() => {
+														currentError = entry.error_details;
+														showErrorDetails = true;
+														// Scroll to the error details section
+														setTimeout(() => {
+															const errorSection = document.querySelector('[data-error-section]');
+															if (errorSection) {
+																errorSection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+															}
+														}, 100);
+													}}
+												>
+													View Error Details
+												</button>
 											</div>
 										{/if}
 									</div>

@@ -4,6 +4,7 @@ import time
 import datetime
 import logging
 from aiohttp import ClientSession
+import json
 
 from open_webui.models.auths import (
     AddUserForm,
@@ -1213,7 +1214,18 @@ async def sync_workflows(
         api_key = getattr(request.app.state.config, 'AIMBENCE_API_KEY', '')
         
         if not base_url:
-            raise HTTPException(status_code=400, detail="AIMbience API base URL not configured")
+            raise HTTPException(
+                status_code=400, 
+                detail={
+                    "error": "Configuration Error",
+                    "message": "AIMbience API base URL not configured",
+                    "config_status": {
+                        "base_url_configured": False,
+                        "api_key_configured": bool(api_key),
+                        "current_base_url": base_url
+                    }
+                }
+            )
         
         # Build the target URL for workflow sync
         target_url = f"{base_url}/api/v1/sync/workflows"
@@ -1242,23 +1254,156 @@ async def sync_workflows(
             if api_key:
                 headers["Authorization"] = f"Bearer {api_key}"
             
-            response = await client.post(
-                target_url, 
-                json=request_data,
-                headers=headers, 
-                timeout=60.0  # Longer timeout for workflow sync
-            )
-            
-            # Log the response for debugging
-            print(f"Workflow sync response: {response.status_code}")
-            
-            # Return the response from aimby-api
-            return Response(
-                content=response.content,
-                status_code=response.status_code,
-                headers=dict(response.headers)
-            )
-            
+            try:
+                response = await client.post(
+                    target_url, 
+                    json=request_data,
+                    headers=headers, 
+                    timeout=60.0  # Longer timeout for workflow sync
+                )
+                
+                # Log the response for debugging
+                print(f"Workflow sync response: {response.status_code}")
+                print(f"Response headers: {dict(response.headers)}")
+                
+                # Try to get response content for better error reporting
+                try:
+                    response_content = response.json()
+                    print(f"Response content: {response_content}")
+                except:
+                    response_content = response.text
+                    print(f"Response text: {response_content}")
+                
+                # If the response is not successful, provide detailed error information
+                if not response.is_success:
+                    error_detail = {
+                        "error": "AIMby API Error",
+                        "http_status": response.status_code,
+                        "http_status_text": response.status_text,
+                        "target_url": target_url,
+                        "request_data": request_data,
+                        "response_headers": dict(response.headers),
+                        "response_content": response_content,
+                        "suggestions": []
+                    }
+                    
+                    # Add specific suggestions based on status code
+                    if response.status_code == 401:
+                        error_detail["suggestions"].extend([
+                            "Check if the AIMbience API key is valid and not expired",
+                            "Verify the API key has the correct permissions",
+                            "Ensure the API key is properly configured in the backend"
+                        ])
+                    elif response.status_code == 403:
+                        error_detail["suggestions"].extend([
+                            "Check if the API key has sufficient permissions for workflow sync",
+                            "Verify the AIMby API user account has the required access level",
+                            "Contact AIMby API administrator for permission verification"
+                        ])
+                    elif response.status_code == 404:
+                        error_detail["suggestions"].extend([
+                            "Verify the workflow sync endpoint exists at the specified URL",
+                            "Check if the AIMby API version supports this endpoint",
+                            "Ensure the API base URL is correct and includes the right path"
+                        ])
+                    elif response.status_code == 500:
+                        error_detail["suggestions"].extend([
+                            "Check AIMby API server logs for internal errors",
+                            "Verify the workflows submodule is properly configured",
+                            "Ensure all required dependencies are available on the AIMby API server"
+                        ])
+                    elif response.status_code == 502 or response.status_code == 503:
+                        error_detail["suggestions"].extend([
+                            "Check if the AIMby API server is running and accessible",
+                            "Verify network connectivity between Open WebUI and AIMby API",
+                            "Check if the AIMby API server is overloaded or under maintenance"
+                        ])
+                    else:
+                        error_detail["suggestions"].extend([
+                            "Check AIMby API server logs for detailed error information",
+                            "Verify the request format matches the expected API specification",
+                            "Contact AIMby API support with the detailed error information"
+                        ])
+                    
+                    # Return detailed error information
+                    return Response(
+                        content=json.dumps(error_detail),
+                        status_code=response.status_code,
+                        headers={"Content-Type": "application/json"}
+                    )
+                
+                # Return the successful response from aimby-api
+                return Response(
+                    content=response.content,
+                    status_code=response.status_code,
+                    headers=dict(response.headers)
+                )
+                
+            except httpx.TimeoutException:
+                error_detail = {
+                    "error": "Timeout Error",
+                    "message": "Request to AIMby API timed out after 60 seconds",
+                    "target_url": target_url,
+                    "request_data": request_data,
+                    "suggestions": [
+                        "Check if the AIMby API server is responding slowly",
+                        "Verify network connectivity and latency",
+                        "Consider increasing the timeout value if the server is consistently slow",
+                        "Check if the AIMby API server is under heavy load"
+                    ]
+                }
+                raise HTTPException(status_code=408, detail=error_detail)
+                
+            except httpx.ConnectError as e:
+                error_detail = {
+                    "error": "Connection Error",
+                    "message": f"Failed to connect to AIMby API: {str(e)}",
+                    "target_url": target_url,
+                    "request_data": request_data,
+                    "suggestions": [
+                        "Check if the AIMby API server is running",
+                        "Verify the API base URL is correct",
+                        "Check network connectivity and firewall settings",
+                        "Ensure the AIMby API server is accessible from the Open WebUI server"
+                    ]
+                }
+                raise HTTPException(status_code=503, detail=error_detail)
+                
+            except httpx.HTTPStatusError as e:
+                error_detail = {
+                    "error": "HTTP Status Error",
+                    "message": f"HTTP {e.response.status_code}: {e.response.status_text}",
+                    "target_url": target_url,
+                    "request_data": request_data,
+                    "response_headers": dict(e.response.headers),
+                    "suggestions": [
+                        "Check the HTTP status code for specific error information",
+                        "Review the response headers for additional error details",
+                        "Verify the request format and parameters"
+                    ]
+                }
+                raise HTTPException(status_code=e.response.status_code, detail=error_detail)
+                
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
-        print(f"Workflow sync error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Workflow sync error: {str(e)}")
+        # Catch any other unexpected errors
+        error_detail = {
+            "error": "Unexpected Error",
+            "message": f"An unexpected error occurred: {str(e)}",
+            "error_type": type(e).__name__,
+            "target_url": target_url if 'target_url' in locals() else "Not determined",
+            "request_data": request_data if 'request_data' in locals() else {},
+            "suggestions": [
+                "Check Open WebUI backend logs for detailed error information",
+                "Verify the AIMbience configuration is correct",
+                "Check if all required dependencies are available",
+                "Contact system administrator with the detailed error information"
+            ]
+        }
+        print(f"Workflow sync unexpected error: {str(e)}")
+        print(f"Error type: {type(e).__name__}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=error_detail)

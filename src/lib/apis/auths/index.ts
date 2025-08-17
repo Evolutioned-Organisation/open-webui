@@ -757,27 +757,38 @@ export const updateAimbienceConfig = async (token: string, body: object) => {
 export const syncWorkflows = async (token: string, options: any = {}) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/admin/aimbience/sync-workflows`, {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${token}`
-		},
-		body: JSON.stringify(options)
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.catch((err) => {
-			console.error(err);
-			error = err.detail || err.message;
-			return null;
+	try {
+		const res = await fetch(`${WEBUI_API_BASE_URL}/auths/admin/aimbience/sync-workflows`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			},
+			body: JSON.stringify(options)
 		});
 
-	if (error) {
-		throw error;
-	}
+		if (!res.ok) {
+			// Try to get detailed error information from the response
+			let errorData;
+			try {
+				errorData = await res.json();
+			} catch {
+				errorData = { detail: res.statusText };
+			}
+			
+			// Create a more detailed error object
+			const detailedError = new Error(`HTTP ${res.status}: ${errorData.detail?.message || errorData.detail || res.statusText}`);
+			detailedError.detail = errorData.detail;
+			detailedError.status = res.status;
+			detailedError.statusText = res.statusText;
+			
+			throw detailedError;
+		}
 
-	return res;
+		return await res.json();
+	} catch (err) {
+		console.error('Sync workflows error:', err);
+		// Re-throw the error so components can handle it properly
+		throw err;
+	}
 };
