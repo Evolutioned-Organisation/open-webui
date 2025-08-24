@@ -1,487 +1,622 @@
 <script lang="ts">
 	import { onMount, getContext } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { getAimbienceConfig, getInstalledPackages } from '$lib/apis/auths';
+	import {
+		getAimbienceConfig,
+		getInstalledPackages,
+		getAvailablePackages,
+		updatePackage
+	} from '$lib/apis/auths';
 
-	const i18n = getContext('i18n');
+	// Context for logging
+	const logDebug = getContext('logDebug');
 
-	let aimbienceConfig: any | null = null;
-	let packages: any[] = [];
+	// State
 	let loading = false;
-	let selectedPackage: any = null;
-	let showInstallModal = false;
-	let showUninstallModal = false;
-	let showUpdateModal = false;
+	let installedPackages: any[] = [];
+	let availablePackages: any[] = [];
+	let sdkPackage: any = null;
+	let workflowPackage: any = null;
+	let availableSdkVersions: any[] = [];
+	let availableWorkflowVersions: any[] = [];
+	let updatingSdk = false;
+	let updatingWorkflow = false;
 
-	// Package management states
-	let installingPackage = false;
-	let uninstallingPackage = false;
-	let updatingPackage = false;
+	// Package types we care about
+	const TARGET_PACKAGES = ['aimby-sdk', 'rag_workflows'];
 
-	// Search and filter
-	let searchQuery = '';
-	let filterStatus = 'all'; // all, installed, available, outdated
-
-	// Filtered packages based on search and status
-	$: filteredPackages = packages.filter((pkg) => {
-		// Apply package type filter
-		if (filterStatus !== 'all') {
-			if (filterStatus === 'sdk' && pkg.packageType !== 'sdk') return false;
-			if (filterStatus === 'workflow' && pkg.packageType !== 'workflow') return false;
-			if ((filterStatus === 'other' && pkg.packageType === 'sdk') || pkg.packageType === 'workflow')
-				return false;
-		}
-
-		// Apply search filter
-		if (searchQuery.trim()) {
-			const query = searchQuery.toLowerCase();
-			return (
-				pkg.name?.toLowerCase().includes(query) ||
-				pkg.description?.toLowerCase().includes(query) ||
-				pkg.version?.toLowerCase().includes(query) ||
-				pkg.packageType?.toLowerCase().includes(query)
-			);
-		}
-
-		return true;
-	});
-
-	const fetchPackages = async () => {
+	// Fetch both installed and available packages
+	const fetchAllPackages = async () => {
 		loading = true;
 		try {
-			console.log('🔄 Fetching installed packages from AIMBY API...');
-			console.log('Token available:', !!localStorage.token);
-			console.log('Token length:', localStorage.token?.length || 0);
+			console.log('🔄 Fetching all package information from AIMBY API...');
 
-			// Fetch installed packages from aimby-api via backend proxy
-			const response = await getInstalledPackages(localStorage.token);
+			// Fetch installed packages
+			const installedResponse = await getInstalledPackages(localStorage.token);
+			console.log('📦 Installed packages response:', installedResponse);
 
-			console.log('📦 API response received:', response);
+			// Fetch available packages
+			const availableResponse = await getAvailablePackages(localStorage.token);
+			console.log('📦 Available packages response:', availableResponse);
 
-			if (response && response.packages) {
-				// Transform the API response to match our component's data structure
-				packages = response.packages.map((pkg: any) => ({
-					id: pkg.name,
-					name: pkg.name,
-					description: pkg.description || 'No description available',
-					version: pkg.version,
-					packageType: pkg.package_type,
-					installed: true,
-					installedVersion: pkg.version,
-					outdated: false, // We'll need additional logic to determine if outdated
-					latestVersion: pkg.version,
-					installedAt: pkg.installed_at,
-					lastUpdated: pkg.installed_at
-				}));
-
-				console.log('✅ Transformed packages:', packages);
-				toast.success(`Loaded ${packages.length} installed packages from AIMBY API`);
-			} else {
-				packages = [];
-				console.log('ℹ️ No packages found in response');
-				toast.info('No packages currently installed');
+			if (installedResponse && installedResponse.packages) {
+				installedPackages = installedResponse.packages;
 			}
-		} catch (error) {
-			console.error('❌ Error fetching installed packages:', error);
-			toast.error('Failed to fetch installed packages from AIMBY API');
 
-			// Fallback to empty array if API fails
-			packages = [];
+			if (availableResponse && availableResponse.packages) {
+				availablePackages = availableResponse.packages;
+			}
+
+			// Organize packages by type
+			organizePackages();
+
+			toast.success('Package information refreshed successfully');
+		} catch (error) {
+			console.error('❌ Error fetching package information:', error);
+			toast.error('Failed to fetch package information from AIMBY API');
 		} finally {
 			loading = false;
 		}
 	};
 
-	const installPackage = async (packageId: string) => {
-		installingPackage = true;
+	// Organize packages into SDK and Workflow categories
+	const organizePackages = () => {
+		// Find SDK package (aimby-sdk)
+		sdkPackage = installedPackages.find((pkg) => pkg.name === 'aimby-sdk') || null;
+
+		// Find Workflow package (rag_workflows)
+		workflowPackage = installedPackages.find((pkg) => pkg.name === 'rag_workflows') || null;
+
+		// Get available versions for each package type
+		availableSdkVersions = availablePackages
+			.filter((pkg) => pkg.name === 'aimby-sdk')
+			.map((pkg) => ({
+				version: pkg.version,
+				description: pkg.description,
+				is_installed: pkg.is_installed
+			}));
+
+		availableWorkflowVersions = availablePackages
+			.filter((pkg) => pkg.name === 'rag_workflows')
+			.map((pkg) => ({
+				version: pkg.version,
+				description: pkg.description,
+				is_installed: pkg.is_installed
+			}));
+
+		console.log('📦 Organized packages:', {
+			sdkPackage,
+			workflowPackage,
+			availableSdkVersions,
+			availableWorkflowVersions
+		});
+	};
+
+	// Update a package to a specific version
+	const updatePackageVersion = async (packageName: string, version: string) => {
+		const isSdk = packageName === 'aimby-sdk';
+		const updating = isSdk ? updatingSdk : updatingWorkflow;
+
+		if (updating) return; // Prevent multiple simultaneous updates
+
 		try {
-			// TODO: Replace with actual API call to install package
-			// await installPackageAPI(localStorage.token, packageId);
-
-			// Mock installation
-			await new Promise((resolve) => setTimeout(resolve, 2000));
-
-			// Update local state
-			const pkg = packages.find((p) => p.id === packageId);
-			if (pkg) {
-				pkg.installed = true;
-				pkg.installedVersion = pkg.latestVersion;
-				pkg.outdated = false;
+			if (isSdk) {
+				updatingSdk = true;
+			} else {
+				updatingWorkflow = true;
 			}
 
-			toast.success(`Package ${pkg?.name} installed successfully`);
+			console.log(`🔄 Updating ${packageName} to version ${version}...`);
+			toast.info(`Updating ${packageName} to version ${version}...`);
+
+			const response = await updatePackage(localStorage.token, packageName, version);
+
+			if (response && response.success) {
+				toast.success(`Successfully updated ${packageName} to version ${version}`);
+				console.log(`✅ Package update successful:`, response);
+
+				// Refresh package information
+				await fetchAllPackages();
+			} else {
+				throw new Error(response?.message || 'Update failed');
+			}
 		} catch (error) {
-			console.error('Error installing package:', error);
-			toast.error('Failed to install package');
+			console.error(`❌ Error updating ${packageName}:`, error);
+			toast.error(`Failed to update ${packageName}: ${error.message || 'Unknown error'}`);
 		} finally {
-			installingPackage = false;
-			showInstallModal = false;
-		}
-	};
-
-	const uninstallPackage = async (packageId: string) => {
-		uninstallingPackage = true;
-		try {
-			// TODO: Replace with actual API call to uninstall package
-			// await uninstallPackageAPI(localStorage.token, packageId);
-
-			// Mock uninstallation
-			await new Promise((resolve) => setTimeout(resolve, 1500));
-
-			// Update local state
-			const pkg = packages.find((p) => p.id === packageId);
-			if (pkg) {
-				pkg.installed = false;
-				pkg.installedVersion = null;
+			if (isSdk) {
+				updatingSdk = false;
+			} else {
+				updatingWorkflow = false;
 			}
-
-			toast.success(`Package ${pkg?.name} uninstalled successfully`);
-		} catch (error) {
-			console.error('Error uninstalling package:', error);
-			toast.error('Failed to uninstall package');
-		} finally {
-			uninstallingPackage = false;
-			showUninstallModal = false;
 		}
 	};
 
-	const updatePackage = async (packageId: string) => {
-		updatingPackage = true;
-		try {
-			// TODO: Replace with actual API call to update package
-			// await updatePackageAPI(localStorage.token, packageId);
-
-			// Mock update
-			await new Promise((resolve) => setTimeout(resolve, 2500));
-
-			// Update local state
-			const pkg = packages.find((p) => p.id === packageId);
-			if (pkg) {
-				pkg.installedVersion = pkg.latestVersion;
-				pkg.outdated = false;
-			}
-
-			toast.success(`Package ${pkg?.name} updated successfully`);
-		} catch (error) {
-			console.error('Error updating package:', error);
-			toast.error('Failed to update package');
-		} finally {
-			updatingPackage = false;
-			showUpdateModal = false;
-		}
+	// Update to latest version
+	const updateToLatest = async (packageName: string) => {
+		await updatePackageVersion(packageName, 'latest');
 	};
 
-	const openInstallModal = (pkg: any) => {
-		selectedPackage = pkg;
-		showInstallModal = true;
-	};
+	// Get package status badge
+	const getPackageStatusBadge = (pkg: any) => {
+		if (!pkg) return { text: 'Not Installed', class: 'bg-gray-500' };
 
-	const openUninstallModal = (pkg: any) => {
-		selectedPackage = pkg;
-		showUninstallModal = true;
-	};
+		const isOutdated = availablePackages.some(
+			(available) => available.name === pkg.name && available.version !== pkg.version
+		);
 
-	const openUpdateModal = (pkg: any) => {
-		selectedPackage = pkg;
-		showUpdateModal = true;
-	};
-
-	const formatDate = (dateString: string) => {
-		try {
-			return new Date(dateString).toLocaleDateString();
-		} catch {
-			return 'Unknown';
-		}
-	};
-
-	const getStatusBadge = (pkg: any) => {
-		if (!pkg.installed) {
-			return '<span class="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded-full">Available</span>';
-		}
-		if (pkg.outdated) {
-			return '<span class="px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">Outdated</span>';
-		}
-		return '<span class="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">Installed</span>';
-	};
-
-	const getPackageTypeBadge = (packageType: string) => {
-		switch (packageType?.toLowerCase()) {
-			case 'sdk':
-				return '<span class="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">SDK</span>';
-			case 'workflow':
-				return '<span class="px-2 py-1 text-xs bg-purple-100 text-purple-800 rounded-full">Workflow</span>';
-			default:
-				return '<span class="px-2 py-1 text-xs bg-gray-100 text-gray-800 rounded-full">Other</span>';
-		}
-	};
-
-	onMount(async () => {
-		// Load Aimbience config
-		try {
-			const config = await getAimbienceConfig(localStorage.token);
-			if (config) {
-				aimbienceConfig = config;
-			}
-		} catch (error) {
-			console.error('Error loading Aimbience config:', error);
+		if (isOutdated) {
+			return { text: 'Update Available', class: 'bg-yellow-500' };
 		}
 
-		// Fetch packages
-		await fetchPackages();
+		return { text: 'Up to Date', class: 'bg-green-500' };
+	};
+
+	// Initialize
+	onMount(() => {
+		fetchAllPackages();
 	});
 </script>
 
 <div class="space-y-6">
-	{#if !aimbienceConfig?.ENABLE_AIMBENCE}
-		<div class="text-center py-12">
-			<div class="text-gray-500 dark:text-gray-400 text-sm">
-				Aimbience integration is not enabled. Please enable it in the Aimbience Config tab.
+	<!-- Header -->
+	<div class="flex justify-between items-center">
+		<div>
+			<h2 class="text-2xl font-bold text-gray-900 dark:text-gray-100">Package Manager</h2>
+			<p class="text-gray-600 dark:text-gray-400">Manage AIMBY SDK and RAG Workflow packages</p>
+		</div>
+		<button
+			on:click={fetchAllPackages}
+			disabled={loading}
+			class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+		>
+			{#if loading}
+				<svg
+					class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+				>
+					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+					></circle>
+					<path
+						class="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+					></path>
+				</svg>
+				Refreshing...
+			{:else}
+				<svg class="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+					></path>
+				</svg>
+				Refresh
+			{/if}
+		</button>
+	</div>
+
+	<!-- Package Summary Cards -->
+	<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+		<div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+			<div class="p-5">
+				<div class="flex items-center">
+					<div class="flex-shrink-0">
+						<svg
+							class="h-6 w-6 text-gray-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+							></path>
+						</svg>
+					</div>
+					<div class="ml-5 w-0 flex-1">
+						<dl>
+							<dt class="text-sm font-medium text-gray-500 truncate">Total Packages</dt>
+							<dd class="text-lg font-medium text-gray-900 dark:text-gray-100">
+								{installedPackages.length}
+							</dd>
+						</dl>
+					</div>
+				</div>
 			</div>
 		</div>
-	{:else}
-		<!-- Header Section -->
-		<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-			<div>
-				<h2 class="text-2xl font-bold text-gray-900 dark:text-white">Package Manager</h2>
-				<p class="text-sm text-gray-600 dark:text-gray-400">
-					View installed workflow packages from the AIMBY API
-				</p>
+
+		<div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+			<div class="p-5">
+				<div class="flex items-center">
+					<div class="flex-shrink-0">
+						<svg
+							class="h-6 w-6 text-blue-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+							></path>
+						</svg>
+					</div>
+					<div class="ml-5 w-0 flex-1">
+						<dl>
+							<dt class="text-sm font-medium text-gray-500 truncate">SDK Packages</dt>
+							<dd class="text-lg font-medium text-gray-900 dark:text-gray-100">
+								{sdkPackage ? 1 : 0}
+							</dd>
+						</dl>
+					</div>
+				</div>
 			</div>
-			<div class="flex gap-2">
-				<button
-					class="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-					on:click={fetchPackages}
-					disabled={loading}
-				>
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+		</div>
+
+		<div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
+			<div class="p-5">
+				<div class="flex items-center">
+					<div class="flex-shrink-0">
+						<svg
+							class="h-6 w-6 text-purple-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+							></path>
+						</svg>
+					</div>
+					<div class="ml-5 w-0 flex-1">
+						<dl>
+							<dt class="text-sm font-medium text-gray-500 truncate">Workflow Packages</dt>
+							<dd class="text-lg font-medium text-gray-900 dark:text-gray-100">
+								{workflowPackage ? 1 : 0}
+							</dd>
+						</dl>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Package Management Cards -->
+	<div class="space-y-6">
+		<!-- AIMBY SDK Management Card -->
+		<div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+			<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+				<h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
+					<svg
+						class="h-5 w-5 text-blue-400 mr-2"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
 						<path
 							stroke-linecap="round"
 							stroke-linejoin="round"
 							stroke-width="2"
-							d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+							d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
 						></path>
 					</svg>
-					Refresh
-				</button>
+					AIMBY SDK Management
+				</h3>
 			</div>
-		</div>
-
-		<!-- Stats Cards -->
-		<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-			<div
-				class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700"
-			>
-				<div class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Packages</div>
-				<div class="text-2xl font-bold text-gray-900 dark:text-white">{packages.length}</div>
-			</div>
-			<div
-				class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700"
-			>
-				<div class="text-sm font-medium text-gray-600 dark:text-gray-400">SDK Packages</div>
-				<div class="text-2xl font-bold text-gray-900 dark:text-white">
-					{packages.filter((p) => p.packageType === 'sdk').length}
-				</div>
-			</div>
-			<div
-				class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700"
-			>
-				<div class="text-sm font-medium text-gray-600 dark:text-gray-400">Workflow Packages</div>
-				<div class="text-2xl font-bold text-gray-900 dark:text-white">
-					{packages.filter((p) => p.packageType === 'workflow').length}
-				</div>
-			</div>
-		</div>
-
-		<!-- Search Section -->
-		<div
-			class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700"
-		>
-			<div class="px-6 py-4">
-				<div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-					<div class="flex-1 max-w-md">
-						<label for="package-search" class="sr-only">Search packages</label>
-						<div class="relative">
-							<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-								<svg
-									class="h-5 w-5 text-gray-400"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-									></path>
-								</svg>
+			<div class="p-6">
+				{#if sdkPackage}
+					<div class="space-y-4">
+						<div class="flex items-center justify-between">
+							<div>
+								<h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">
+									{sdkPackage.name}
+								</h4>
+								<p class="text-sm text-gray-500">Current Version: {sdkPackage.version}</p>
+								<p class="text-sm text-gray-500">
+									Installed: {new Date(sdkPackage.installed_at).toLocaleDateString()}
+								</p>
 							</div>
-							<input
-								id="package-search"
-								type="text"
-								bind:value={searchQuery}
-								class="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-								placeholder="Search packages by name, description, or type..."
-							/>
+							<div class="flex items-center space-x-2">
+								<span
+									class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {getPackageStatusBadge(
+										sdkPackage
+									).class} text-white"
+								>
+									{getPackageStatusBadge(sdkPackage).text}
+								</span>
+								<span
+									class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+								>
+									SDK
+								</span>
+							</div>
 						</div>
-					</div>
-					<div class="flex items-center gap-4">
-						<label for="type-filter" class="text-sm text-gray-600 dark:text-gray-400">Filter:</label
-						>
-						<select
-							id="type-filter"
-							bind:value={filterStatus}
-							class="text-sm border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-						>
-							<option value="all">All Packages</option>
-							<option value="sdk">SDK Packages</option>
-							<option value="workflow">Workflow Packages</option>
-							<option value="other">Other Packages</option>
-						</select>
-					</div>
-				</div>
-			</div>
-		</div>
 
-		<!-- Packages List -->
-		<div
-			class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700"
-		>
-			<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-				<div class="flex items-center justify-between">
-					<h3 class="text-lg font-medium text-gray-900 dark:text-white">Installed Packages</h3>
-					<div class="text-sm text-gray-500 dark:text-gray-400">
-						Showing {filteredPackages.length} of {packages.length} packages
-					</div>
-				</div>
-			</div>
-
-			<div class="relative">
-				{#if loading}
-					<div
-						class="absolute inset-0 bg-white dark:bg-gray-800 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-10"
-					>
-						<svg
-							class="animate-spin h-8 w-8 text-blue-600"
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-						>
-							<circle
-								class="opacity-25"
-								cx="12"
-								cy="12"
-								r="10"
-								stroke="currentColor"
-								stroke-width="4"
-							></circle>
-							<path
-								class="opacity-75"
-								fill="currentColor"
-								d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-							></path>
-						</svg>
-					</div>
-				{/if}
-
-				{#if filteredPackages.length === 0 && !loading}
-					<div class="text-center py-12">
-						<div class="text-gray-500 dark:text-gray-400 text-sm">
-							{#if searchQuery || filterStatus !== 'all'}
-								No packages found matching your criteria
+						<div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+							<div class="flex items-center space-x-4">
+								<label
+									for="sdk-version"
+									class="text-sm font-medium text-gray-700 dark:text-gray-300"
+									>Update to Version:</label
+								>
+								<select
+									id="sdk-version"
+									class="block w-48 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+								>
+									<option value="latest">Latest Available</option>
+									{#each availableSdkVersions as version}
+										<option value={version.version}>{version.version}</option>
+									{/each}
+								</select>
 								<button
 									on:click={() => {
-										searchQuery = '';
-										filterStatus = 'all';
+										const select = document.getElementById('sdk-version');
+										if (select && select.tagName === 'SELECT') {
+											updatePackageVersion('aimby-sdk', select.value);
+										}
 									}}
-									class="ml-2 text-blue-600 dark:text-blue-400 hover:underline"
+									disabled={updatingSdk}
+									class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
 								>
-									Clear filters
+									{#if updatingSdk}
+										<svg
+											class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+											xmlns="http://www.w3.org/2000/svg"
+											fill="none"
+											viewBox="0 0 24 24"
+										>
+											<circle
+												class="opacity-25"
+												cx="12"
+												cy="12"
+												r="10"
+												stroke="currentColor"
+												stroke-width="4"
+											></circle>
+											<path
+												class="opacity-75"
+												fill="currentColor"
+												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+											></path>
+										</svg>
+										Updating...
+									{:else}
+										Update
+									{/if}
 								</button>
-							{:else}
-								No packages currently installed
-							{/if}
+							</div>
 						</div>
 					</div>
 				{:else}
-					<div class="divide-y divide-gray-200 dark:divide-gray-700">
-						{#each filteredPackages as pkg (pkg.id)}
-							<div class="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-								<div class="flex items-start justify-between">
-									<div class="flex-1 min-w-0">
-										<div class="flex items-center gap-3 mb-2">
-											<h4 class="text-lg font-medium text-gray-900 dark:text-white">{pkg.name}</h4>
-											<span class="text-sm text-gray-500 dark:text-gray-400">v{pkg.version}</span>
-											{@html getStatusBadge(pkg)}
-											{@html getPackageTypeBadge(pkg.packageType)}
-										</div>
-										<p class="text-sm text-gray-600 dark:text-gray-400 mb-3">{pkg.description}</p>
-
-										<div class="flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
-											<div>
-												<span class="font-medium">Package Type:</span>
-												{pkg.packageType || 'Unknown'}
-											</div>
-											<div>
-												<span class="font-medium">Installed:</span>
-												{formatDate(pkg.installedAt)}
-											</div>
-											<div>
-												<span class="font-medium">Version:</span> v{pkg.version}
-											</div>
-										</div>
-									</div>
-
-									<div class="flex flex-col gap-2 ml-4">
-										<button
-											on:click={() => openUninstallModal(pkg)}
-											class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+					<div class="text-center py-8">
+						<svg
+							class="mx-auto h-12 w-12 text-gray-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
+							></path>
+						</svg>
+						<h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+							No SDK Package Installed
+						</h3>
+						<p class="mt-1 text-sm text-gray-500">
+							The AIMBY SDK package is not currently installed.
+						</p>
+						{#if availableSdkVersions.length > 0}
+							<div class="mt-4">
+								<p class="text-sm text-gray-500 mb-2">Available versions:</p>
+								<div class="flex flex-wrap gap-2 justify-center">
+									{#each availableSdkVersions as version}
+										<span
+											class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
 										>
-											Uninstall
-										</button>
-									</div>
+											{version.version}
+										</span>
+									{/each}
 								</div>
 							</div>
-						{/each}
+						{/if}
 					</div>
 				{/if}
 			</div>
 		</div>
-	{/if}
 
-	<!-- Uninstall Package Modal -->
-	{#if showUninstallModal && selectedPackage}
-		<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-			<div
-				class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800"
-			>
-				<div class="mt-3 text-center">
-					<h3 class="text-lg font-medium text-gray-900 dark:text-white mb-4">Uninstall Package</h3>
-					<p class="text-sm text-gray-600 dark:text-gray-400 mb-6">
-						Are you sure you want to uninstall <strong>{selectedPackage.name}</strong>? This action
-						cannot be undone.
-					</p>
-					<div class="flex justify-center gap-3">
-						<button
-							on:click={() => (showUninstallModal = false)}
-							class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
-						>
-							Cancel
-						</button>
-						<button
-							on:click={() => uninstallPackage(selectedPackage.id)}
-							disabled={uninstallingPackage}
-							class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-						>
-							{#if uninstallingPackage}
-								Uninstalling...
-							{:else}
-								Uninstall
-							{/if}
-						</button>
+		<!-- RAG Workflows Management Card -->
+		<div class="bg-white dark:bg-gray-800 shadow rounded-lg">
+			<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+				<h3 class="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
+					<svg
+						class="h-5 w-5 text-purple-400 mr-2"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+						></path>
+					</svg>
+					RAG Workflows Management
+				</h3>
+			</div>
+			<div class="p-6">
+				{#if workflowPackage}
+					<div class="space-y-4">
+						<div class="flex items-center justify-between">
+							<div>
+								<h4 class="text-sm font-medium text-gray-900 dark:text-gray-100">
+									{workflowPackage.name}
+								</h4>
+								<p class="text-sm text-gray-500">Current Version: {workflowPackage.version}</p>
+								<p class="text-sm text-gray-500">
+									Installed: {new Date(workflowPackage.installed_at).toLocaleDateString()}
+								</p>
+							</div>
+							<div class="flex items-center space-x-2">
+								<span
+									class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {getPackageStatusBadge(
+										workflowPackage
+									).class} text-white"
+								>
+									{getPackageStatusBadge(workflowPackage).text}
+								</span>
+								<span
+									class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
+								>
+									Workflow
+								</span>
+							</div>
+						</div>
+
+						<div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+							<div class="flex items-center space-x-4">
+								<label
+									for="workflow-version"
+									class="text-sm font-medium text-gray-700 dark:text-gray-300"
+									>Update to Version:</label
+								>
+								<select
+									id="workflow-version"
+									class="block w-48 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+								>
+									<option value="latest">Latest Available</option>
+									{#each availableWorkflowVersions as version}
+										<option value={version.version}>{version.version}</option>
+									{/each}
+								</select>
+								<button
+									on:click={() => {
+										const select = document.getElementById('workflow-version');
+										if (select && select.tagName === 'SELECT') {
+											updatePackageVersion('rag_workflows', select.value);
+										}
+									}}
+									disabled={updatingWorkflow}
+									class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									{#if updatingWorkflow}
+										<svg
+											class="animate-spin -ml-1 mr-2 h-4 w-4 text-white"
+											xmlns="http://www.w3.org/2000/svg"
+											fill="none"
+											viewBox="0 0 24 24"
+										>
+											<circle
+												class="opacity-25"
+												cx="12"
+												cy="12"
+												r="10"
+												stroke="currentColor"
+												stroke-width="4"
+											></circle>
+											<path
+												class="opacity-75"
+												fill="currentColor"
+												d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+											></path>
+										</svg>
+										Updating...
+									{:else}
+										Update
+									{/if}
+								</button>
+							</div>
+						</div>
 					</div>
+				{:else}
+					<div class="text-center py-8">
+						<svg
+							class="mx-auto h-12 w-12 text-gray-400"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+							></path>
+						</svg>
+						<h3 class="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+							No Workflow Package Installed
+						</h3>
+						<p class="mt-1 text-sm text-gray-500">
+							The RAG Workflows package is not currently installed.
+						</p>
+						{#if availableWorkflowVersions.length > 0}
+							<div class="mt-4">
+								<p class="text-sm text-gray-500 mb-2">Available versions:</p>
+								<div class="flex flex-wrap gap-2 justify-center">
+									{#each availableWorkflowVersions as version}
+										<span
+											class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200"
+										>
+											{version.version}
+										</span>
+									{/each}
+								</div>
+							</div>
+						{/if}
+					</div>
+				{/if}
+			</div>
+		</div>
+	</div>
+
+	<!-- Information Panel -->
+	<div
+		class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4"
+	>
+		<div class="flex">
+			<div class="flex-shrink-0">
+				<svg class="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+					></path>
+				</svg>
+			</div>
+			<div class="ml-3">
+				<h3 class="text-sm font-medium text-blue-800 dark:text-blue-200">
+					Package Management Information
+				</h3>
+				<div class="mt-2 text-sm text-blue-700 dark:text-blue-300">
+					<p>This Package Manager focuses on the two core packages required for AIMbience:</p>
+					<ul class="list-disc list-inside mt-1 space-y-1">
+						<li><strong>AIMBY SDK:</strong> Core functionality and utilities for the platform</li>
+						<li>
+							<strong>RAG Workflows:</strong> Retrieval-Augmented Generation workflow definitions
+						</li>
+					</ul>
+					<p class="mt-2">
+						Use the version dropdowns to select specific versions or choose "Latest Available" for
+						automatic updates.
+					</p>
 				</div>
 			</div>
 		</div>
-	{/if}
+	</div>
 </div>
