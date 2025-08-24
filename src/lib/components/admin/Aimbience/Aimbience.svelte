@@ -20,7 +20,12 @@
 	$: {
 		const pathParts = $page.url.pathname.split('/');
 		const tabFromPath = pathParts[pathParts.length - 1];
-		selectedTab = ['aimbience-config', 'workflow-sync', 'aimbience-tools', 'package-manager'].includes(tabFromPath)
+		selectedTab = [
+			'aimbience-config',
+			'workflow-sync',
+			'aimbience-tools',
+			'package-manager'
+		].includes(tabFromPath)
 			? tabFromPath
 			: 'workflow-sync';
 	}
