@@ -762,13 +762,16 @@ export const getInstalledPackages = async (token: string) => {
 		`/api/v1/auths/admin/aimbience/proxy/api/v1/workflows/packages/installed`
 	);
 
-	const res = await fetch(`/api/v1/auths/admin/aimbience/proxy/api/v1/workflows/packages/installed`, {
-		method: 'GET',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${token}`
+	const res = await fetch(
+		`/api/v1/auths/admin/aimbience/proxy/api/v1/workflows/packages/installed`,
+		{
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			}
 		}
-	})
+	)
 		.then(async (res) => {
 			console.log('🔍 Response status:', res.status, res.statusText);
 			if (!res.ok) {
