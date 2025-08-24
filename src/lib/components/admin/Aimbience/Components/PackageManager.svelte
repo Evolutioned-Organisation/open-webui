@@ -22,8 +22,13 @@
 	let updatingSdk = false;
 	let updatingWorkflow = false;
 
+	// Debug reactive variables
+	$: console.log('🔄 Reactive update - workflowPackage:', workflowPackage);
+	$: console.log('🔄 Reactive update - sdkPackage:', sdkPackage);
+	$: console.log('🔄 Reactive update - installedPackages length:', installedPackages.length);
+
 	// Package types we care about
-	const TARGET_PACKAGES = ['aimby-sdk', 'rag_workflows'];
+	const TARGET_PACKAGES = ['aimby-sdk', 'rag-workflows'];
 
 	// Fetch both installed and available packages
 	const fetchAllPackages = async () => {
@@ -34,17 +39,23 @@
 			// Fetch installed packages
 			const installedResponse = await getInstalledPackages(localStorage.token);
 			console.log('📦 Installed packages response:', installedResponse);
+			console.log('📦 Installed packages response type:', typeof installedResponse);
+			console.log('📦 Installed packages response keys:', Object.keys(installedResponse || {}));
 
 			// Fetch available packages
 			const availableResponse = await getAvailablePackages(localStorage.token);
 			console.log('📦 Available packages response:', availableResponse);
+			console.log('📦 Available packages response type:', typeof availableResponse);
+			console.log('📦 Available packages response keys:', Object.keys(availableResponse || {}));
 
 			if (installedResponse && installedResponse.packages) {
 				installedPackages = installedResponse.packages;
+				console.log('📦 Set installedPackages:', installedPackages);
 			}
 
 			if (availableResponse && availableResponse.packages) {
 				availablePackages = availableResponse.packages;
+				console.log('📦 Set availablePackages:', availablePackages);
 			}
 
 			// Organize packages by type
@@ -61,26 +72,45 @@
 
 	// Organize packages into SDK and Workflow categories
 	const organizePackages = () => {
-		// Find SDK package (aimby-sdk)
-		sdkPackage = installedPackages.find((pkg) => pkg.name === 'aimby-sdk') || null;
+		console.log('🔍 Organizing packages...');
+		console.log('📦 Raw installed packages:', installedPackages);
+		console.log('📦 Raw available packages:', availablePackages);
 
-		// Find Workflow package (rag_workflows)
-		workflowPackage = installedPackages.find((pkg) => pkg.name === 'rag_workflows') || null;
+		// Find SDK package (aimby-sdk)
+		sdkPackage =
+			installedPackages.find((pkg) => pkg.name === 'aimby-sdk' || pkg.package_type === 'sdk') ||
+			null;
+		console.log('🔍 Found SDK package:', sdkPackage);
+
+		// Find Workflow package (rag_workflows or rag-workflows)
+		workflowPackage =
+			installedPackages.find(
+				(pkg) =>
+					pkg.name === 'rag_workflows' ||
+					pkg.name === 'rag-workflows' ||
+					pkg.package_type === 'workflow'
+			) || null;
+		console.log('🔍 Found Workflow package:', workflowPackage);
 
 		// Get available versions for each package type
 		availableSdkVersions = availablePackages
-			.filter((pkg) => pkg.name === 'aimby-sdk')
+			.filter((pkg) => pkg.name === 'aimby-sdk' || pkg.package_type === 'sdk')
 			.map((pkg) => ({
 				version: pkg.version,
-				description: pkg.description,
+				description: pkg.description || 'No description available',
 				is_installed: pkg.is_installed
 			}));
 
 		availableWorkflowVersions = availablePackages
-			.filter((pkg) => pkg.name === 'rag_workflows')
+			.filter(
+				(pkg) =>
+					pkg.name === 'rag_workflows' ||
+					pkg.name === 'rag-workflows' ||
+					pkg.package_type === 'workflow'
+			)
 			.map((pkg) => ({
 				version: pkg.version,
-				description: pkg.description,
+				description: pkg.description || 'No description available',
 				is_installed: pkg.is_installed
 			}));
 
@@ -95,6 +125,7 @@
 	// Update a package to a specific version
 	const updatePackageVersion = async (packageName: string, version: string) => {
 		const isSdk = packageName === 'aimby-sdk';
+		const isWorkflow = packageName === 'rag-workflows';
 		const updating = isSdk ? updatingSdk : updatingWorkflow;
 
 		if (updating) return; // Prevent multiple simultaneous updates
@@ -102,7 +133,7 @@
 		try {
 			if (isSdk) {
 				updatingSdk = true;
-			} else {
+			} else if (isWorkflow) {
 				updatingWorkflow = true;
 			}
 
@@ -126,7 +157,7 @@
 		} finally {
 			if (isSdk) {
 				updatingSdk = false;
-			} else {
+			} else if (isWorkflow) {
 				updatingWorkflow = false;
 			}
 		}
@@ -198,99 +229,6 @@
 				Refresh
 			{/if}
 		</button>
-	</div>
-
-	<!-- Package Summary Cards -->
-	<div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-		<div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-			<div class="p-5">
-				<div class="flex items-center">
-					<div class="flex-shrink-0">
-						<svg
-							class="h-6 w-6 text-gray-400"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-							></path>
-						</svg>
-					</div>
-					<div class="ml-5 w-0 flex-1">
-						<dl>
-							<dt class="text-sm font-medium text-gray-500 truncate">Total Packages</dt>
-							<dd class="text-lg font-medium text-gray-900 dark:text-gray-100">
-								{installedPackages.length}
-							</dd>
-						</dl>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-			<div class="p-5">
-				<div class="flex items-center">
-					<div class="flex-shrink-0">
-						<svg
-							class="h-6 w-6 text-blue-400"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
-							></path>
-						</svg>
-					</div>
-					<div class="ml-5 w-0 flex-1">
-						<dl>
-							<dt class="text-sm font-medium text-gray-500 truncate">SDK Packages</dt>
-							<dd class="text-lg font-medium text-gray-900 dark:text-gray-100">
-								{sdkPackage ? 1 : 0}
-							</dd>
-						</dl>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
-			<div class="p-5">
-				<div class="flex items-center">
-					<div class="flex-shrink-0">
-						<svg
-							class="h-6 w-6 text-purple-400"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-							></path>
-						</svg>
-					</div>
-					<div class="ml-5 w-0 flex-1">
-						<dl>
-							<dt class="text-sm font-medium text-gray-500 truncate">Workflow Packages</dt>
-							<dd class="text-lg font-medium text-gray-900 dark:text-gray-100">
-								{workflowPackage ? 1 : 0}
-							</dd>
-						</dl>
-					</div>
-				</div>
-			</div>
-		</div>
 	</div>
 
 	<!-- Package Management Cards -->
@@ -508,7 +446,7 @@
 									on:click={() => {
 										const select = document.getElementById('workflow-version');
 										if (select && select.tagName === 'SELECT') {
-											updatePackageVersion('rag_workflows', select.value);
+											updatePackageVersion('rag-workflows', select.value);
 										}
 									}}
 									disabled={updatingWorkflow}
