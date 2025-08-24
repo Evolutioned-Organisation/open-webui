@@ -145,11 +145,17 @@
 			if (response && response.success) {
 				toast.success(`Successfully updated ${packageName} to version ${version}`);
 				console.log(`✅ Package update successful:`, response);
+				
+				// Show upgrade log if available
+				if (response.upgrade_log && response.upgrade_log.length > 0) {
+					console.log('📋 Upgrade log:', response.upgrade_log);
+				}
 
 				// Refresh package information
 				await fetchAllPackages();
 			} else {
-				throw new Error(response?.message || 'Update failed');
+				const errorMessage = response?.message || response?.detail || 'Update failed';
+				throw new Error(errorMessage);
 			}
 		} catch (error) {
 			console.error(`❌ Error updating ${packageName}:`, error);

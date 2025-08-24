@@ -825,44 +825,27 @@ export const getAvailablePackages = async (token: string) => {
 	return res;
 };
 
-export const updatePackage = async (token: string, packageName: string, version?: string) => {
-	let error = null;
-
-	console.log('🔍 updatePackage called with token:', !!token, 'length:', token?.length || 0);
-	console.log('🔍 Updating package:', packageName, 'to version:', version || 'latest');
-
-	const requestBody: any = { package_name: packageName };
-	if (version) {
-		requestBody.version = version;
-	}
-
-	const res = await fetch(
-		`/api/v1/auths/admin/aimbience/proxy/api/v1/workflows/update`,
-		{
+export const updatePackage = async (token: string, packageName: string, version?: string): Promise<any> => {
+	try {
+		const response = await fetch(`${WEBUI_API_BASE_URL}/api/v1/auths/admin/aimbience/proxy/api/v1/workflows/packages/upgrade`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
 				Authorization: `Bearer ${token}`
 			},
-			body: JSON.stringify(requestBody)
-		}
-	)
-		.then(async (res) => {
-			console.log('🔍 Response status:', res.status, res.statusText);
-			if (!res.ok) {
-				const errorData = await res.json();
-				console.log('🔍 Error response:', errorData);
-				throw errorData;
-			}
-			return res.json();
-		})
-		.catch((err) => {
-			console.error('🔍 Fetch error:', err);
-			error = err.detail;
-			return null;
+			body: JSON.stringify({
+				package_names: [packageName],
+				version: version === 'latest' ? undefined : version
+			})
 		});
-	if (error) {
+
+		if (!response.ok) {
+			throw new Error(`HTTP error! status: ${response.status}`);
+		}
+
+		return await response.json();
+	} catch (error) {
+		console.error('Error updating package:', error);
 		throw error;
 	}
-	return res;
 };
