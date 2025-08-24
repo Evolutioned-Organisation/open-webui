@@ -756,22 +756,30 @@ export const deleteAPIKey = async (token: string) => {
 export const getInstalledPackages = async (token: string) => {
 	let error = null;
 
-	const res = await fetch(
-		`/api/v1/auths/admin/aimbience/proxy/workflows/packages/installed`,
-		{
-			method: 'GET',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${token}`
-			}
+	console.log('🔍 getInstalledPackages called with token:', !!token, 'length:', token?.length || 0);
+	console.log(
+		'🔍 Making request to:',
+		`/api/v1/auths/admin/aimbience/proxy/api/v1/workflows/packages/installed`
+	);
+
+	const res = await fetch(`/api/v1/auths/admin/aimbience/proxy/api/v1/workflows/packages/installed`, {
+		method: 'GET',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			console.log('🔍 Response status:', res.status, res.statusText);
+			if (!res.ok) {
+				const errorData = await res.json();
+				console.log('🔍 Error response:', errorData);
+				throw errorData;
+			}
 			return res.json();
 		})
 		.catch((err) => {
-			console.error(err);
+			console.error('🔍 Fetch error:', err);
 			error = err.detail;
 			return null;
 		});
