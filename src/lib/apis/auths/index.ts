@@ -756,13 +756,16 @@ export const deleteAPIKey = async (token: string) => {
 export const getInstalledPackages = async (token: string) => {
 	let error = null;
 
-	const res = await fetch(`${WEBUI_API_BASE_URL}/admin/aimbience/proxy/workflows/packages/installed`, {
-		method: 'GET',
-		headers: {
-			'Content-Type': 'application/json',
-			Authorization: `Bearer ${token}`
+	const res = await fetch(
+		`/api/v1/auths/admin/aimbience/proxy/workflows/packages/installed`,
+		{
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			}
 		}
-	})
+	)
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();

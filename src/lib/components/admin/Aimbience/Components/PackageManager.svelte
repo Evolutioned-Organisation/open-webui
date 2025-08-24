@@ -28,7 +28,8 @@
 		if (filterStatus !== 'all') {
 			if (filterStatus === 'sdk' && pkg.packageType !== 'sdk') return false;
 			if (filterStatus === 'workflow' && pkg.packageType !== 'workflow') return false;
-			if (filterStatus === 'other' && pkg.packageType === 'sdk' || pkg.packageType === 'workflow') return false;
+			if ((filterStatus === 'other' && pkg.packageType === 'sdk') || pkg.packageType === 'workflow')
+				return false;
 		}
 
 		// Apply search filter
@@ -48,8 +49,14 @@
 	const fetchPackages = async () => {
 		loading = true;
 		try {
+			console.log('🔄 Fetching installed packages from AIMBY API...');
+			console.log('Token available:', !!localStorage.token);
+			console.log('Token length:', localStorage.token?.length || 0);
+			
 			// Fetch installed packages from aimby-api via backend proxy
 			const response = await getInstalledPackages(localStorage.token);
+			
+			console.log('📦 API response received:', response);
 			
 			if (response && response.packages) {
 				// Transform the API response to match our component's data structure
@@ -67,13 +74,15 @@
 					lastUpdated: pkg.installed_at
 				}));
 				
+				console.log('✅ Transformed packages:', packages);
 				toast.success(`Loaded ${packages.length} installed packages from AIMBY API`);
 			} else {
 				packages = [];
+				console.log('ℹ️ No packages found in response');
 				toast.info('No packages currently installed');
 			}
 		} catch (error) {
-			console.error('Error fetching installed packages:', error);
+			console.error('❌ Error fetching installed packages:', error);
 			toast.error('Failed to fetch installed packages from AIMBY API');
 			
 			// Fallback to empty array if API fails
@@ -317,8 +326,7 @@
 						</div>
 					</div>
 					<div class="flex items-center gap-4">
-						<label for="type-filter" class="text-sm text-gray-600 dark:text-gray-400"
-							>Filter:</label
+						<label for="type-filter" class="text-sm text-gray-600 dark:text-gray-400">Filter:</label
 						>
 						<select
 							id="type-filter"
