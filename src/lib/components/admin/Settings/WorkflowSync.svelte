@@ -18,12 +18,6 @@
 	let showAdvancedSettings = false;
 	let environment = 'unknown';
 	let availableUrls = [];
-	let toolInstallLoading = false;
-	let toolInstallStatus = 'idle'; // 'idle', 'installing', 'success', 'error'
-	let toolInstallMessage = '';
-	let toolVerifyLoading = false;
-	let toolVerifyStatus = 'idle'; // 'idle', 'verifying', 'success', 'error'
-	let toolVerifyMessage = '';
 
 	// Load settings from localStorage or use defaults
 	onMount(async () => {
@@ -130,21 +124,17 @@
 		syncMessage = 'Starting workflow synchronization...';
 
 		try {
-			// Call the AIMBY sync tool through the tools API
-			const response = await fetch(`${WEBUI_BASE_URL}/api/v1/tools/execute`, {
+			// Call the backend workflow sync API endpoint
+			const response = await fetch(`${WEBUI_BASE_URL}/api/admin/aimbience/sync-workflows`, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
 					Authorization: `Bearer ${localStorage.token}`
 				},
 				body: JSON.stringify({
-					tool_id: 'aimby_sync_workflows',
-					function_name: 'sync_workflows',
-					parameters: {
-						// Pass custom settings as parameters
-						custom_api_url: aimbyApiUrl,
-						custom_timeout: timeoutSeconds
-					}
+					// Pass custom settings as parameters
+					custom_api_url: aimbyApiUrl,
+					custom_timeout: timeoutSeconds
 				})
 			});
 
@@ -152,21 +142,14 @@
 				const result = await response.json();
 				lastSyncTime = new Date().toISOString();
 
-				// Check if the tool execution was successful
-				if (result.success && result.result) {
-					// Check if the result contains error information from the tool
-					if (typeof result.result === 'string' && result.result.includes('❌')) {
-						syncStatus = 'error';
-						syncMessage = result.result;
-						toast.error($i18n.t('Workflow sync failed'));
-					} else {
-						syncStatus = 'success';
-						syncMessage = result.result;
-						toast.success($i18n.t('Workflow sync completed successfully!'));
-					}
+				// Check if the sync was successful
+				if (result.success) {
+					syncStatus = 'success';
+					syncMessage = result.message || 'Workflow sync completed successfully!';
+					toast.success($i18n.t('Workflow sync completed successfully!'));
 				} else {
 					syncStatus = 'error';
-					syncMessage = result.error || result.detail || 'Workflow sync failed';
+					syncMessage = result.message || result.error || 'Workflow sync failed';
 					toast.error($i18n.t('Workflow sync failed'));
 				}
 
@@ -175,7 +158,7 @@
 					timestamp: lastSyncTime,
 					status: syncStatus,
 					message: syncMessage,
-					result: result.result || result
+					result: result.data || result
 				};
 				syncHistory.unshift(historyEntry);
 				if (syncHistory.length > 10) {
@@ -204,135 +187,6 @@
 			localStorage.setItem('workflowSyncHistory', JSON.stringify(syncHistory));
 
 			toast.error($i18n.t('Workflow sync failed!'));
-		}
-	};
-
-	const getWorkflowStatus = async () => {
-		try {
-			const response = await fetch(`${WEBUI_BASE_URL}/api/v1/tools/execute`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${localStorage.token}`
-				},
-				body: JSON.stringify({
-					tool_id: 'aimby_sync_workflows',
-					function_name: 'get_workflows_status',
-					parameters: {
-						// Pass custom settings as parameters
-						custom_api_url: aimbyApiUrl,
-						custom_timeout: timeoutSeconds
-					}
-				})
-			});
-
-			if (response.ok) {
-				const result = await response.json();
-
-				// Check if the tool execution was successful
-				if (result.success && result.result) {
-					// Check if the result contains error information from the tool
-					if (typeof result.result === 'string' && result.result.includes('❌')) {
-						toast.error($i18n.t('Failed to get workflow status'));
-						throw new Error(result.result);
-					} else {
-						toast.success($i18n.t('Workflow status retrieved successfully!'));
-						return result.result;
-					}
-				} else {
-					toast.error($i18n.t('Failed to get workflow status'));
-					throw new Error(result.error || result.detail || 'Failed to get workflow status');
-				}
-			} else {
-				throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-			}
-		} catch (error) {
-			toast.error($i18n.t('Failed to get workflow status!'));
-			throw error;
-		}
-	};
-
-	const installTool = async () => {
-		toolInstallLoading = true;
-		toolInstallStatus = 'installing';
-		toolInstallMessage = 'Installing AIMBY sync tool...';
-
-		try {
-			// Call the tool installation API endpoint
-			const response = await fetch(`${WEBUI_BASE_URL}/api/v1/utils/admin/install-aimby-tool`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${localStorage.token}`
-				}
-			});
-
-			if (response.ok) {
-				const result = await response.json();
-
-				if (result.success) {
-					toolInstallStatus = 'success';
-					toolInstallMessage = result.message || 'Tool installed successfully!';
-					toast.success($i18n.t('AIMBY tool installed successfully!'));
-				} else {
-					toolInstallStatus = 'error';
-					toolInstallMessage = result.message || result.error || 'Tool installation failed';
-					toast.error($i18n.t('Tool installation failed'));
-				}
-			} else {
-				const errorText = await response.text();
-				toolInstallStatus = 'error';
-				toolInstallMessage = `Installation failed: ${response.status} ${errorText}`;
-				toast.error($i18n.t('Tool installation failed'));
-			}
-		} catch (error) {
-			toolInstallStatus = 'error';
-			toolInstallMessage = `Installation error: ${error.message}`;
-			toast.error($i18n.t('Tool installation failed'));
-		} finally {
-			toolInstallLoading = false;
-		}
-	};
-
-	const verifyTool = async () => {
-		toolVerifyLoading = true;
-		toolVerifyStatus = 'verifying';
-		toolVerifyMessage = 'Verifying AIMBY sync tool...';
-
-		try {
-			// Call the tool verification API endpoint
-			const response = await fetch(`${WEBUI_BASE_URL}/api/v1/utils/admin/verify-aimby-tool`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					Authorization: `Bearer ${localStorage.token}`
-				}
-			});
-
-			if (response.ok) {
-				const result = await response.json();
-
-				if (result.success) {
-					toolVerifyStatus = 'success';
-					toolVerifyMessage = result.message || 'Tool verified successfully!';
-					toast.success($i18n.t('AIMBY tool verified successfully!'));
-				} else {
-					toolVerifyStatus = 'error';
-					toolVerifyMessage = result.message || result.error || 'Tool verification failed';
-					toast.error($i18n.t('Tool verification failed'));
-				}
-			} else {
-				const errorText = await response.text();
-				toolVerifyStatus = 'error';
-				toolVerifyMessage = `Verification failed: ${response.status} ${errorText}`;
-				toast.error($i18n.t('Tool verification failed'));
-			}
-		} catch (error) {
-			toolVerifyStatus = 'error';
-			toolVerifyMessage = `Verification error: ${error.message}`;
-			toast.error($i18n.t('Tool verification failed'));
-		} finally {
-			toolVerifyLoading = false;
 		}
 	};
 
@@ -429,64 +283,6 @@
 				{/if}
 			</div>
 
-			<!-- Tool Installation Status -->
-			<div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-				<div class="flex items-center justify-between mb-2">
-					<span class="font-medium text-gray-900 dark:text-white">
-						{$i18n.t('Tool Installation Status')}
-					</span>
-				</div>
-
-				<div class="flex items-center space-x-3">
-					{#if toolInstallStatus === 'idle'}
-						<div class="w-3 h-3 bg-gray-400 rounded-full"></div>
-						<span class="text-gray-600 dark:text-gray-400">{$i18n.t('Tool not installed')}</span>
-					{:else if toolInstallStatus === 'installing'}
-						<div class="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-						<span class="text-blue-600 dark:text-blue-400">{$i18n.t('Installing...')}</span>
-					{:else if toolInstallStatus === 'success'}
-						<div class="w-3 h-3 bg-green-500 rounded-full"></div>
-						<span class="text-green-600 dark:text-green-400">{$i18n.t('Tool installed')}</span>
-					{:else if toolInstallStatus === 'error'}
-						<div class="w-3 h-3 bg-red-500 rounded-full"></div>
-						<span class="text-red-600 dark:text-red-400">{$i18n.t('Installation failed')}</span>
-					{/if}
-				</div>
-
-				{#if toolInstallMessage}
-					<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{toolInstallMessage}</p>
-				{/if}
-			</div>
-
-			<!-- Tool Verification Status -->
-			<div class="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-				<div class="flex items-center justify-between mb-2">
-					<span class="font-medium text-gray-900 dark:text-white">
-						{$i18n.t('Tool Verification Status')}
-					</span>
-				</div>
-
-				<div class="flex items-center space-x-3">
-					{#if toolVerifyStatus === 'idle'}
-						<div class="w-3 h-3 bg-gray-400 rounded-full"></div>
-						<span class="text-gray-600 dark:text-gray-400">{$i18n.t('Tool not verified')}</span>
-					{:else if toolVerifyStatus === 'verifying'}
-						<div class="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
-						<span class="text-blue-600 dark:text-blue-400">{$i18n.t('Verifying...')}</span>
-					{:else if toolVerifyStatus === 'success'}
-						<div class="w-3 h-3 bg-green-500 rounded-full"></div>
-						<span class="text-green-600 dark:text-green-400">{$i18n.t('Tool verified')}</span>
-					{:else if toolVerifyStatus === 'error'}
-						<div class="w-3 h-3 bg-red-500 rounded-full"></div>
-						<span class="text-red-600 dark:text-red-400">{$i18n.t('Verification failed')}</span>
-					{/if}
-				</div>
-
-				{#if toolVerifyMessage}
-					<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">{toolVerifyMessage}</p>
-				{/if}
-			</div>
-
 			<!-- Action Buttons -->
 			<div class="flex space-x-3">
 				<button
@@ -501,34 +297,6 @@
 						></span>
 					{/if}
 					{$i18n.t('Sync Workflows')}
-				</button>
-
-				<button
-					type="button"
-					class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-					on:click={installTool}
-					disabled={toolInstallLoading}
-				>
-					{#if toolInstallLoading}
-						<span
-							class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"
-						></span>
-					{/if}
-					{$i18n.t('Install Tool')}
-				</button>
-
-				<button
-					type="button"
-					class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-					on:click={verifyTool}
-					disabled={toolVerifyLoading}
-				>
-					{#if toolVerifyLoading}
-						<span
-							class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"
-						></span>
-					{/if}
-					{$i18n.t('Verify Tool')}
 				</button>
 
 				<button
