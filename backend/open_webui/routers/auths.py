@@ -1094,7 +1094,7 @@ async def update_aimbience_config(
     }
 
 
-@router.get("/admin/aimbience/proxy/{path:path}")
+@router.api_route("/admin/aimbience/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def aimbience_proxy(
     request: Request, 
     path: str, 
@@ -1115,7 +1115,7 @@ async def aimbience_proxy(
             target_url += f"?{query_params}"
         
         # Log the proxy request for debugging
-        print(f"Aimbience proxy: {path} -> {target_url}")
+        print(f"Aimbience proxy: {request.method} {path} -> {target_url}")
         print(f"API Key present: {bool(api_key)}")
         
         # Make the request to aimby-api
@@ -1124,12 +1124,39 @@ async def aimbience_proxy(
             headers = {
                 "Accept": "application/json",
                 "Content-Type": "application/json"
-                
             }
             if api_key:
                 headers["Authorization"] = f"Bearer {api_key}"
             
-            response = await client.get(target_url, headers=headers, timeout=30.0)
+            # Get request body for POST/PUT/PATCH requests
+            body = None
+            if request.method in ["POST", "PUT", "PATCH"]:
+                try:
+                    body = await request.body()
+                    if body:
+                        # Try to parse as JSON for logging
+                        try:
+                            import json
+                            body_json = json.loads(body)
+                            print(f"Request body: {body_json}")
+                        except:
+                            print(f"Request body (raw): {body}")
+                except Exception as e:
+                    print(f"Error reading request body: {e}")
+            
+            # Make the request with the appropriate method
+            if request.method == "GET":
+                response = await client.get(target_url, headers=headers, timeout=30.0)
+            elif request.method == "POST":
+                response = await client.post(target_url, headers=headers, content=body, timeout=30.0)
+            elif request.method == "PUT":
+                response = await client.put(target_url, headers=headers, content=body, timeout=30.0)
+            elif request.method == "DELETE":
+                response = await client.delete(target_url, headers=headers, timeout=30.0)
+            elif request.method == "PATCH":
+                response = await client.patch(target_url, headers=headers, content=body, timeout=30.0)
+            else:
+                raise HTTPException(status_code=405, detail=f"Method {request.method} not supported")
             
             # Log the response for debugging
             print(f"Aimbience proxy response: {response.status_code}")

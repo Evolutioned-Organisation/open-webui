@@ -10,6 +10,7 @@
 	import DocumentIngestion from './Components/DocumentIngestion.svelte';
 	import AimbienceConfig from './Components/AimbienceConfig.svelte';
 	import AimbienceTools from './Components/AimbienceTools.svelte';
+	import PackageManager from './Components/PackageManager.svelte';
 
 	const i18n = getContext('i18n');
 
@@ -19,7 +20,7 @@
 	$: {
 		const pathParts = $page.url.pathname.split('/');
 		const tabFromPath = pathParts[pathParts.length - 1];
-		selectedTab = ['aimbience-config', 'workflow-sync', 'aimbience-tools'].includes(tabFromPath)
+		selectedTab = ['aimbience-config', 'workflow-sync', 'aimbience-tools', 'package-manager'].includes(tabFromPath)
 			? tabFromPath
 			: 'workflow-sync';
 	}
@@ -113,6 +114,33 @@
 		</button>
 
 		<button
+			id="package-manager"
+			class="px-0.5 py-1 min-w-fit rounded-lg flex-1 lg:flex-none flex text-right transition {selectedTab ===
+			'package-manager'
+				? ''
+				: ' text-gray-300 dark:text-gray-600 hover:text-gray-700 dark:hover:text-white'}"
+			on:click={() => {
+				goto('/admin/aimbience/package-manager');
+			}}
+		>
+			<div class=" self-center mr-2">
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					viewBox="0 0 24 24"
+					fill="currentColor"
+					class="w-4 h-4"
+				>
+					<path
+						fill-rule="evenodd"
+						d="M12 6.75a5.25 5.25 0 01 6.775-5.025.75.75 0 01 .313 1.248l-3.32 3.319c.063.475.276.934.641 1.299.365.365.824.578 1.3.64l3.318-3.319a.75.75 0 01 1.248.313 5.25 5.25 0 01-5.472 6.756c-1.018-.086-1.87.1-2.309.634L7.344 21.3A3.298 3.298 0 1 1 2.7 16.657l8.684-7.151c.533-.44.72-1.291.634-2.309A5.342 5.342 0 1 1 12 6.75ZM4.117 19.125a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 .75.75v.008a.75.75 0 0 1-.75.75h-.008a.75.75 0 0 1-.75-.75v-.008Z"
+						clip-rule="evenodd"
+					/>
+				</svg>
+			</div>
+			<div class=" self-center">{$i18n.t('Package Manager')}</div>
+		</button>
+
+		<button
 			id="aimbience-tools"
 			class="px-0.5 py-1 min-w-fit rounded-lg flex-1 lg:flex-none flex text-right transition {selectedTab ===
 			'aimbience-tools'
@@ -147,6 +175,8 @@
 					toast.success($i18n.t('Settings saved successfully!'));
 				}}
 			/>
+		{:else if selectedTab === 'package-manager'}
+			<PackageManager />
 		{:else if selectedTab === 'aimbience-config'}
 			<div class="p-6">
 				<h2 class="text-2xl font-bold mb-4">Aimbience Configuration</h2>
