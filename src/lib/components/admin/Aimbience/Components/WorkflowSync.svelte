@@ -11,6 +11,7 @@
 	let syncing = false;
 	let lastSyncResult: any = null;
 	let workflowsStatus: any = null;
+	let showDetailedResults = false;
 
 	// Debug reactive variables
 	$: console.log('🔄 Reactive update - lastSyncResult:', lastSyncResult);
@@ -96,16 +97,13 @@
 	const formatSyncMessage = () => {
 		if (!lastSyncResult) return 'No sync operation performed yet.';
 
-		const { status, message, pipelines_synced, failed_pipelines } = lastSyncResult;
+		const { status, message, sync_summary } = lastSyncResult;
 
 		let formattedMessage = message;
 
-		if (pipelines_synced > 0) {
-			formattedMessage += ` (${pipelines_synced} pipelines synced)`;
-		}
-
-		if (failed_pipelines && Object.keys(failed_pipelines).length > 0) {
-			formattedMessage += ` - ${Object.keys(failed_pipelines).length} failed`;
+		if (sync_summary) {
+			const { total_successful, total_failed, total_workflows_discovered } = sync_summary;
+			formattedMessage += ` (${total_successful} successful, ${total_failed} failed out of ${total_workflows_discovered} total)`;
 		}
 
 		return formattedMessage;
@@ -140,28 +138,170 @@
 		</div>
 
 		{#if lastSyncResult}
-			<div class="space-y-3">
+			<div class="space-y-4">
+				<!-- Overall Status -->
 				<div class="text-sm text-gray-600 dark:text-gray-400">
 					<strong>Message:</strong>
 					{formatSyncMessage()}
 				</div>
 
-				{#if lastSyncResult.pipelines_synced > 0}
-					<div class="text-sm text-gray-600 dark:text-gray-400">
-						<strong>Pipelines Synced:</strong>
-						{lastSyncResult.pipelines_synced}
+				<!-- Discovery Summary -->
+				{#if lastSyncResult.discovery_summary}
+					<div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+						<h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+							🔍 Discovery Summary
+						</h4>
+						<div class="grid grid-cols-2 gap-4 text-xs">
+							<div>
+								<span class="text-gray-500 dark:text-gray-400">Total Found:</span>
+								<span class="ml-2 font-medium"
+									>{lastSyncResult.discovery_summary.total_discovered}</span
+								>
+							</div>
+							<div>
+								<span class="text-gray-500 dark:text-gray-400">Unique:</span>
+								<span class="ml-2 font-medium"
+									>{lastSyncResult.discovery_summary.unique_workflows}</span
+								>
+							</div>
+							<div>
+								<span class="text-gray-500 dark:text-gray-400">Duplicates:</span>
+								<span class="ml-2 font-medium"
+									>{lastSyncResult.discovery_summary.duplicate_count}</span
+								>
+							</div>
+							<div>
+								<span class="text-gray-500 dark:text-gray-400">Status:</span>
+								<span class="ml-2 font-medium capitalize">{lastSyncResult.status}</span>
+							</div>
+						</div>
+
+						{#if lastSyncResult.discovery_summary.duplicates && lastSyncResult.discovery_summary.duplicates.length > 0}
+							<div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+								<strong>Duplicate Workflows:</strong>
+								{lastSyncResult.discovery_summary.duplicates.join(', ')}
+							</div>
+						{/if}
 					</div>
 				{/if}
 
-				{#if lastSyncResult.failed_pipelines && Object.keys(lastSyncResult.failed_pipelines).length > 0}
-					<div class="text-sm text-gray-600 dark:text-gray-400">
-						<strong>Failed Pipelines:</strong>
-						<ul class="list-disc list-inside mt-1 ml-4">
-							{#each Object.entries(lastSyncResult.failed_pipelines) as [pipeline, error]}
-								<li><strong>{pipeline}:</strong> {error}</li>
-							{/each}
-						</ul>
+				<!-- Sync Summary -->
+				{#if lastSyncResult.sync_summary}
+					<div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+						<h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">📊 Sync Summary</h4>
+						<div class="grid grid-cols-2 gap-4 text-xs">
+							<div>
+								<span class="text-gray-500 dark:text-gray-400">Conversions:</span>
+								<span class="ml-2 font-medium"
+									>{lastSyncResult.sync_summary.successful_conversions} ✅ / {lastSyncResult
+										.sync_summary.failed_conversions} ❌</span
+								>
+							</div>
+							<div>
+								<span class="text-gray-500 dark:text-gray-400">Uploads:</span>
+								<span class="ml-2 font-medium"
+									>{lastSyncResult.sync_summary.successful_uploads} ✅ / {lastSyncResult
+										.sync_summary.failed_uploads} ❌</span
+								>
+							</div>
+							<div class="col-span-2">
+								<span class="text-gray-500 dark:text-gray-400">Total Result:</span>
+								<span class="ml-2 font-medium text-lg"
+									>{lastSyncResult.sync_summary.total_successful} ✅ / {lastSyncResult.sync_summary
+										.total_failed} ❌</span
+								>
+							</div>
+						</div>
 					</div>
+				{/if}
+
+				<!-- Individual Workflow Details Toggle -->
+				{#if lastSyncResult.workflow_details && Object.keys(lastSyncResult.workflow_details).length > 0}
+					<div class="flex items-center justify-between">
+						<button
+							on:click={() => (showDetailedResults = !showDetailedResults)}
+							class="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1"
+						>
+							{#if showDetailedResults}
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M5 15l7-7 7 7"
+									></path>
+								</svg>
+							{:else}
+								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M19 9l-7 7-7-7"
+									></path>
+								</svg>
+							{/if}
+							{showDetailedResults ? 'Hide' : 'Show'} Detailed Workflow Results
+						</button>
+					</div>
+
+					{#if showDetailedResults}
+						<div class="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+							<h4 class="text-sm font-medium text-gray-900 dark:text-white mb-2">
+								📋 Individual Workflow Details
+							</h4>
+
+							<!-- Successful Workflows -->
+							{#if Object.values(lastSyncResult.workflow_details).filter((w) => w.final_status === 'success').length > 0}
+								<div class="mb-3">
+									<div class="text-xs font-medium text-green-700 dark:text-green-300 mb-1">
+										✅ Successful Workflows ({Object.values(lastSyncResult.workflow_details).filter(
+											(w) => w.final_status === 'success'
+										).length})
+									</div>
+									<div class="space-y-1">
+										{#each Object.entries(lastSyncResult.workflow_details) as [workflowId, details]}
+											{#if details.final_status === 'success'}
+												<div class="text-xs text-gray-600 dark:text-gray-400 ml-3">
+													• {workflowId} - {details.pipeline_file} ({details.pipeline_size} bytes)
+												</div>
+											{/if}
+										{/each}
+									</div>
+								</div>
+							{/if}
+
+							<!-- Failed Workflows -->
+							{#if Object.values(lastSyncResult.workflow_details).filter((w) => w.final_status === 'failed').length > 0}
+								<div>
+									<div class="text-xs font-medium text-red-700 dark:text-red-300 mb-1">
+										❌ Failed Workflows ({Object.values(lastSyncResult.workflow_details).filter(
+											(w) => w.final_status === 'failed'
+										).length})
+									</div>
+									<div class="space-y-1">
+										{#each Object.entries(lastSyncResult.workflow_details) as [workflowId, details]}
+											{#if details.final_status === 'failed'}
+												<div class="text-xs text-gray-600 dark:text-gray-400 ml-3">
+													• {workflowId}
+													{#if details.conversion_error}
+														<div class="ml-3 text-red-600 dark:text-red-400">
+															Conversion: {details.conversion_error}
+														</div>
+													{/if}
+													{#if details.upload_error}
+														<div class="ml-3 text-red-600 dark:text-red-400">
+															Upload: {details.upload_error}
+														</div>
+													{/if}
+												</div>
+											{/if}
+										{/each}
+									</div>
+								</div>
+							{/if}
+						</div>
+					{/if}
 				{/if}
 			</div>
 		{:else}

@@ -25,6 +25,8 @@ services:
     environment:
       - 'OLLAMA_BASE_URL=http://ollama:11434'
       - 'WEBUI_SECRET_KEY='
+      - 'AIMBENCE_API_BASE_URL=http://aimby-api:8000'
+      - 'AIMBENCE_API_KEY=test-1234-key'
     extra_hosts:
       - host.docker.internal:host-gateway
     restart: unless-stopped

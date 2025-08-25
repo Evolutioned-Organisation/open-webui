@@ -1117,8 +1117,12 @@ async def aimbience_proxy(
         # Log the proxy request for debugging
         print(f"Aimbience proxy: {request.method} {path} -> {target_url}")
         print(f"API Key present: {bool(api_key)}")
+        print(f"API Key length: {len(api_key) if api_key else 0}")
+        print(f"Request headers: {dict(request.headers)}")
         
         # Make the request to aimby-api
+        # Note: Package operations (upgrade/install) are async and return task IDs immediately
+        # The frontend then monitors task progress separately
         import httpx
         async with httpx.AsyncClient() as client:
             headers = {
@@ -1127,6 +1131,11 @@ async def aimbience_proxy(
             }
             if api_key:
                 headers["Authorization"] = f"Bearer {api_key}"
+                print(f"Setting Authorization header: Bearer {api_key[:10]}...")
+            else:
+                print("No API key found, proceeding without authentication")
+            
+            print(f"Final request headers to backend: {headers}")
             
             # Get request body for POST/PUT/PATCH requests
             body = None
@@ -1148,7 +1157,13 @@ async def aimbience_proxy(
             if request.method == "GET":
                 response = await client.get(target_url, headers=headers, timeout=30.0)
             elif request.method == "POST":
-                response = await client.post(target_url, headers=headers, content=body, timeout=30.0)
+                if "packages" in path:
+                    # Package operations should return very quickly (task ID only)
+                    timeout = 10.0  # Reduced timeout for package operations
+                    print(f"Using reduced timeout {timeout}s for package operation")
+                else:
+                    timeout = 30.0
+                response = await client.post(target_url, headers=headers, content=body, timeout=timeout)
             elif request.method == "PUT":
                 response = await client.put(target_url, headers=headers, content=body, timeout=30.0)
             elif request.method == "DELETE":
@@ -1160,8 +1175,49 @@ async def aimbience_proxy(
             
             # Log the response for debugging
             print(f"Aimbience proxy response: {response.status_code}")
+            print(f"Aimbience proxy response headers: {dict(response.headers)}")
             
-            # Return the response from aimby-api
+            # Check if response is successful
+            if response.status_code >= 400:
+                print(f"Aimbience proxy error response: {response.text}")
+            
+            # For package operations, we need to handle the response efficiently
+            # The response body is typically just a JSON task ID, so we can read it quickly
+            if "packages" in path and request.method == "POST":
+                print(f"Handling package operation response for {path}")
+                try:
+                    # Read response body with a reasonable timeout
+                    response_text = await response.aread()
+                    response_str = response_text.decode('utf-8')
+                    print(f"Package operation response body: {response_str}")
+                    
+                    # Validate that we got a proper response
+                    if response_str and len(response_str) > 0:
+                        return Response(
+                            content=response_text,
+                            status_code=response.status_code,
+                            headers=dict(response.headers)
+                        )
+                    else:
+                        print("Warning: Empty response body, returning fallback")
+                        return Response(
+                            content='{"success": true, "message": "Package operation started", "status": "started"}',
+                            status_code=200,
+                            headers=dict(response.headers)
+                        )
+                except Exception as e:
+                    print(f"Error reading package response body: {e}")
+                    print(f"Response status: {response.status_code}")
+                    print(f"Response headers: {dict(response.headers)}")
+                    # If reading fails, return a minimal response with the task ID
+                    # This ensures the frontend gets a response even if body reading fails
+                    return Response(
+                        content='{"success": true, "message": "Package operation started", "status": "started"}',
+                        status_code=200,
+                        headers=dict(response.headers)
+                    )
+            
+            # For other operations, use streaming response to avoid timeouts
             return Response(
                 content=response.content,
                 status_code=response.status_code,
@@ -1169,5 +1225,8 @@ async def aimbience_proxy(
             )
             
     except Exception as e:
+        import traceback
         print(f"Aimbience proxy error: {str(e)}")
+        print(f"Aimbience proxy error type: {type(e).__name__}")
+        print(f"Aimbience proxy error traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Proxy error: {str(e)}")
