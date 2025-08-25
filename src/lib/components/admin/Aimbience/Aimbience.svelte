@@ -6,7 +6,7 @@
 	import { config } from '$lib/stores';
 	import { getBackendConfig } from '$lib/apis';
 
-	import WorkflowSync from '../Settings/WorkflowSync.svelte';
+	import WorkflowSync from './Components/WorkflowSync.svelte';
 	import DocumentIngestion from './Components/DocumentIngestion.svelte';
 	import AimbienceConfig from './Components/AimbienceConfig.svelte';
 	import AimbienceTools from './Components/AimbienceTools.svelte';
