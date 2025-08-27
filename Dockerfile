@@ -92,6 +92,9 @@ RUN if [ $UID -ne 0 ]; then \
 # Copy backend files from backend_builder stage (not from host)
 COPY --chown=$UID:$GID --from=backend_builder /app/backend /app/backend
 
+# Copy startup script
+COPY --chown=$UID:$GID backend/start.sh /app/start.sh
+
 # Set up necessary directories and permissions
 RUN mkdir -p /root/.cache/chroma && \
     echo -n 00000000-0000-0000-0000-000000000000 > /root/.cache/chroma/telemetry_user_id && \
