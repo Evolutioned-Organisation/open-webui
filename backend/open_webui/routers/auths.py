@@ -1126,14 +1126,23 @@ async def aimbience_proxy(
         import httpx
         async with httpx.AsyncClient() as client:
             headers = {
-                "Accept": "application/json",
-                "Content-Type": "application/json"
+                "Accept": "application/json"
             }
-            if api_key:
+            
+            # Only add Content-Type for requests that might have a body
+            if request.method in ["POST", "PUT", "PATCH"]:
+                headers["Content-Type"] = "application/json"
+            
+            # Don't send authentication for public endpoints
+            public_endpoints = ["health", "docs", "openapi.json"]
+            if api_key and path not in public_endpoints:
                 headers["Authorization"] = f"Bearer {api_key}"
                 print(f"Setting Authorization header: Bearer {api_key[:10]}...")
             else:
-                print("No API key found, proceeding without authentication")
+                if path in public_endpoints:
+                    print(f"Public endpoint '{path}' - no authentication required")
+                else:
+                    print("No API key found, proceeding without authentication")
             
             print(f"Final request headers to backend: {headers}")
             
