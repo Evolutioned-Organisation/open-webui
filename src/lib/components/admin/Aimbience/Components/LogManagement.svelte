@@ -10,7 +10,7 @@
 	import { globalErrorHandler, createErrorContext, withGracefulDegradation } from '$lib/utils/errorHandling';
 
 	// API and component imports
-	import { getLogsViaProxy, type LogFileInfo } from '$lib/apis/aimby';
+	import { getLogsViaProxy, type LogFileInfo, type LogListResponse } from '$lib/apis/aimby';
 	import { getAimbienceConfig } from '$lib/apis/auths';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
 	import ArrowDownTray from '$lib/components/icons/ArrowDownTray.svelte';
@@ -26,6 +26,7 @@
 	// Configuration and data state
 	let aimbienceConfig: any | null = null; // Aimbience integration configuration
 	let logs: LogFileInfo[] = []; // Raw log files data from API
+	let totalLogCount = 0; // Total number of log files available
 	let loading = false; // Loading state for API requests
 	let page = 1; // Current pagination page
 	let count = 10; // Number of items per page
@@ -143,14 +144,19 @@
 			// Use proxy function to avoid CORS issues with direct AIMBY-API calls
 			const response = await getLogsViaProxy(localStorage.token || '', validatedCount);
 			if (response) {
-				logs = response;
+				logs = response.logs;
+				totalLogCount = response.total_count;
 				retryCount = 0; // Reset retry count on successful request
 				
 				// Provide appropriate user feedback based on context
+				const displayMessage = totalLogCount > logs.length 
+					? `Retrieved ${logs.length} of ${totalLogCount} log files`
+					: `Retrieved ${logs.length} log files`;
+					
 				if (!isRetry) {
-					toast.success(`Retrieved ${logs.length} log files`);
+					toast.success(displayMessage);
 				} else {
-					toast.success(`Successfully retrieved ${logs.length} log files after retry`);
+					toast.success(`Successfully ${displayMessage.toLowerCase()} after retry`);
 				}
 			} else {
 				throw new Error('No response received from server - the logs endpoint may not be available on your AIMBY-API instance');
@@ -162,6 +168,7 @@
 			
 			// Reset state and prepare error display
 			logs = [];
+			totalLogCount = 0;
 			
 			// Create more informative error messages
 			let errorMessage = createSafeErrorMessage(error, 'Failed to fetch log files');
@@ -321,7 +328,7 @@
 				aria-label="Total log files count"
 			>
 				<div class="text-sm font-medium text-gray-600 dark:text-gray-400">Total Log Files</div>
-				<div class="text-2xl font-bold text-gray-900 dark:text-white" aria-live="polite">{logs.length}</div>
+				<div class="text-2xl font-bold text-gray-900 dark:text-white" aria-live="polite">{totalLogCount}</div>
 			</div>
 			<div
 				class="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 transition-shadow hover:shadow-md"
@@ -332,7 +339,7 @@
 				<div class="text-2xl font-bold text-gray-900 dark:text-white" aria-live="polite">{filteredLogs.length}</div>
 				{#if searchQuery && filteredLogs.length !== logs.length}
 					<div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-						Filtered from {logs.length}
+						Filtered from {logs.length} loaded
 					</div>
 				{/if}
 			</div>
@@ -441,12 +448,20 @@
 
 						<!-- Results Info -->
 						<div class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-							<span>Showing {filteredLogs.length} log files</span>
+							<span>Showing {filteredLogs.length} of {totalLogCount} log files</span>
 							{#if searchQuery}
 								<span
 									class="px-2 py-1 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 rounded-full text-xs"
 								>
 									Filtered
+								</span>
+							{/if}
+							{#if logs.length < totalLogCount}
+								<span
+									class="px-2 py-1 bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 rounded-full text-xs"
+									title="Only showing first {count} files. Increase the 'Show' limit to see more."
+								>
+									Limited
 								</span>
 							{/if}
 						</div>

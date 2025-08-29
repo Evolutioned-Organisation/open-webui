@@ -3,12 +3,6 @@ import {
 	sanitizeUrlParameter,
 	validateNumericParameter
 } from '$lib/utils/validation';
-import {
-	enhancedFetch,
-	createErrorContext,
-	withRetry,
-	DEFAULT_RETRY_CONFIG
-} from '$lib/utils/errorHandling';
 
 // Base URL for all AIMBY-API proxy requests
 const AIMBY_PROXY_BASE = '/api/v1/auths/admin/aimbience/proxy';
@@ -64,6 +58,9 @@ export interface LogFileInfo {
 
 export interface LogListResponse {
 	logs: LogFileInfo[];
+	total_count: number;
+	limit?: number;
+	offset?: number;
 }
 
 export interface LogContentResponse {
@@ -205,9 +202,7 @@ export const getBatchDetailsViaProxy = async (
 export const getLogsViaProxy = async (
 	token: string = '',
 	limit: number = 10
-): Promise<LogFileInfo[] | null> => {
-	const context = createErrorContext('getLogsViaProxy', 'aimby-api');
-
+): Promise<LogListResponse | null> => {
 	try {
 		// Validate input parameters
 		if (!token || typeof token !== 'string') {
@@ -221,54 +216,47 @@ export const getLogsViaProxy = async (
 		}
 
 		// Use relative path - Vite will proxy this to the backend
-		const apiUrl = `${AIMBY_PROXY_BASE}/api/v1/logs?limit=${validatedLimit}`;
+		// Add trailing slash to prevent redirect that causes CORS preflight issues
+		const apiUrl = `${AIMBY_PROXY_BASE}/api/v1/logs/?limit=${validatedLimit}`;
 
 		console.log('Fetching logs from:', apiUrl);
 
-		const operation = async () => {
-			const res = await enhancedFetch(
-				apiUrl,
-				{
-					method: 'GET',
-					headers: {
-						Accept: 'application/json',
-						'Content-Type': 'application/json',
-						Authorization: `Bearer ${token}`
-					}
-				},
-				context
-			);
-
-			// Check if response is ok
-			if (!res.ok) {
-				const errorText = await res.text();
-				console.error('API Error Response:', {
-					status: res.status,
-					statusText: res.statusText,
-					body: errorText
-				});
-
-				if (res.status === 404) {
-					throw new Error(
-						'Logs endpoint not found - please ensure your AIMBY-API supports /api/v1/logs'
-					);
-				} else if (res.status === 500) {
-					throw new Error('AIMBY-API server error - please check your AIMBY-API logs');
-				} else {
-					throw new Error(`API request failed: ${res.status} ${res.statusText}`);
-				}
+		const res = await fetch(apiUrl, {
+			method: 'GET',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
 			}
+		});
 
-			const data = await res.json();
-			console.log('Logs API Response:', data);
+		// Check if response is ok
+		if (!res.ok) {
+			const errorText = await res.text();
+			console.error('API Error Response:', {
+				status: res.status,
+				statusText: res.statusText,
+				body: errorText
+			});
 
-			// Validate response data
-			if (!Array.isArray(data)) {
-				throw new Error('Invalid response format: expected array');
+			if (res.status === 404) {
+				throw new Error(
+					'Logs endpoint not found - please ensure your AIMBY-API supports /api/v1/logs'
+				);
+			} else if (res.status === 500) {
+				throw new Error('AIMBY-API server error - please check your AIMBY-API logs');
+			} else {
+				throw new Error(`API request failed: ${res.status} ${res.statusText}`);
 			}
+		}
 
-			// Validate each log file info object
-			const validatedData = data.filter((item: unknown) => {
+		const data = await res.json();
+		console.log('Logs API Response:', data);
+
+		// Handle both old array format and new object format for backward compatibility
+		if (Array.isArray(data)) {
+			// Old format - just an array of logs
+			const validatedLogs = data.filter((item: unknown) => {
 				const logItem = item as Record<string, unknown>;
 				return (
 					logItem &&
@@ -279,10 +267,33 @@ export const getLogsViaProxy = async (
 				);
 			}) as LogFileInfo[];
 
-			return validatedData;
-		};
+			return {
+				logs: validatedLogs,
+				total_count: validatedLogs.length, // Fallback: assume returned count is total
+				limit: limit
+			};
+		} else if (data && typeof data === 'object' && Array.isArray(data.logs)) {
+			// New format - object with logs array and total_count
+			const validatedLogs = data.logs.filter((item: unknown) => {
+				const logItem = item as Record<string, unknown>;
+				return (
+					logItem &&
+					typeof logItem.filename === 'string' &&
+					validateFilename(logItem.filename) &&
+					typeof logItem.size === 'number' &&
+					typeof logItem.modified === 'number'
+				);
+			}) as LogFileInfo[];
 
-		return await withRetry(operation, context, DEFAULT_RETRY_CONFIG);
+			return {
+				logs: validatedLogs,
+				total_count: typeof data.total_count === 'number' ? data.total_count : validatedLogs.length,
+				limit: typeof data.limit === 'number' ? data.limit : limit,
+				offset: typeof data.offset === 'number' ? data.offset : 0
+			};
+		} else {
+			throw new Error('Invalid response format: expected array or object with logs property');
+		}
 	} catch (err) {
 		console.error('Error in getLogsViaProxy:', err);
 		return null;
@@ -315,8 +326,6 @@ export const getLogContentViaProxy = async (
 	token: string = '',
 	filename: string
 ): Promise<LogContentResponse | null> => {
-	const context = createErrorContext('getLogContentViaProxy', 'aimby-api');
-
 	try {
 		// Validate input parameters
 		if (!token || typeof token !== 'string') {
@@ -339,43 +348,53 @@ export const getLogContentViaProxy = async (
 
 		console.log('Fetching log content from:', infoUrl);
 
-		const operation = async () => {
-			const infoRes = await enhancedFetch(
-				infoUrl,
-				{
-					method: 'GET',
-					headers: {
-						Accept: 'application/json',
-						'Content-Type': 'application/json',
-						Authorization: `Bearer ${token}`
-					}
-				},
-				context
-			);
-
-			const fileInfo = (await infoRes.json()) as Record<string, unknown>;
-
-			// Validate response structure
-			if (!fileInfo || typeof fileInfo !== 'object') {
-				throw new Error('Invalid response format');
+		const infoRes = await fetch(infoUrl, {
+			method: 'GET',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
 			}
+		});
 
-			// Validate filename in response matches request
-			if (fileInfo.filename !== sanitizedFilename) {
-				throw new Error('Response filename mismatch');
+		// Check if response is ok
+		if (!infoRes.ok) {
+			const errorText = await infoRes.text();
+			console.error('API Error Response:', {
+				status: infoRes.status,
+				statusText: infoRes.statusText,
+				body: errorText
+			});
+
+			if (infoRes.status === 404) {
+				throw new Error('Log file not found');
+			} else if (infoRes.status === 500) {
+				throw new Error('AIMBY-API server error - please check your AIMBY-API logs');
+			} else {
+				throw new Error(`API request failed: ${infoRes.status} ${infoRes.statusText}`);
 			}
+		}
 
-			// Return the file info with content_preview as content
-			return {
-				filename: fileInfo.filename as string,
-				size: typeof fileInfo.size === 'number' ? fileInfo.size : 0,
-				modified: typeof fileInfo.modified === 'number' ? fileInfo.modified : 0,
-				content: (fileInfo.content_preview as string[] | Record<string, unknown>) || [],
-				timestamp: fileInfo.timestamp as string
-			};
+		const fileInfo = (await infoRes.json()) as Record<string, unknown>;
+
+		// Validate response structure
+		if (!fileInfo || typeof fileInfo !== 'object') {
+			throw new Error('Invalid response format');
+		}
+
+		// Validate filename in response matches request
+		if (fileInfo.filename !== sanitizedFilename) {
+			throw new Error('Response filename mismatch');
+		}
+
+		// Return the file info with content_preview as content
+		return {
+			filename: fileInfo.filename as string,
+			size: typeof fileInfo.size === 'number' ? fileInfo.size : 0,
+			modified: typeof fileInfo.modified === 'number' ? fileInfo.modified : 0,
+			content: (fileInfo.content_preview as string[] | Record<string, unknown>) || [],
+			timestamp: fileInfo.timestamp as string
 		};
-
-		return await withRetry(operation, context, DEFAULT_RETRY_CONFIG);
 	} catch (err) {
 		console.error('Error in getLogContentViaProxy:', err);
 		return null;
