@@ -32,9 +32,8 @@
 	
 	// External library imports
 	import dayjs from 'dayjs';
-	import hljs from 'highlight.js/lib/core';
-	import json from 'highlight.js/lib/languages/json';
-	import 'highlight.js/styles/github-dark.css';
+	import relativeTime from 'dayjs/plugin/relativeTime';
+	dayjs.extend(relativeTime);
 
 	const i18n = getContext('i18n');
 
@@ -43,12 +42,9 @@
 	let logContent: LogContentResponse | null = null; // Log file content and metadata
 	let loading = true; // Loading state for initial and refresh requests
 	let error: string | null = null; // Error message for display
-	let contentElement: HTMLElement; // Reference to content element for syntax highlighting
 	let retryCount = 0; // Number of retry attempts for failed requests
 	let isRetrying = false; // Specific retry state to differentiate from initial loading
-
-	// Register JSON language for highlight.js syntax highlighting
-	hljs.registerLanguage('json', json);
+	let viewMode: 'tree' | 'raw' = 'tree'; // Toggle between tree view and raw JSON
 
 	onMount(async () => {
 		// Get filename from URL parameters
@@ -72,12 +68,49 @@
 		await fetchLogContent();
 	});
 
-	afterUpdate(() => {
-		// Apply syntax highlighting after content updates
-		if (contentElement && logContent?.content && isValidJSON(logContent.content)) {
-			hljs.highlightElement(contentElement);
-		}
-	});
+	// JSON Tree Renderer Component
+	function JsonTreeNode({ key, value, level = 0, isLast = true }) {
+		let expanded = level < 2; // Auto-expand first 2 levels
+		
+		const getValueType = (val) => {
+			if (val === null) return 'null';
+			if (Array.isArray(val)) return 'array';
+			return typeof val;
+		};
+		
+		const getValuePreview = (val) => {
+			const type = getValueType(val);
+			switch (type) {
+				case 'string': return `"${val.length > 50 ? val.substring(0, 50) + '...' : val}"`;
+				case 'number': return val.toString();
+				case 'boolean': return val.toString();
+				case 'null': return 'null';
+				case 'array': return `Array(${val.length})`;
+				case 'object': return `Object(${Object.keys(val).length})`;
+				default: return String(val);
+			}
+		};
+		
+		const isExpandable = (val) => {
+			return Array.isArray(val) || (typeof val === 'object' && val !== null);
+		};
+		
+		const toggleExpanded = () => {
+			expanded = !expanded;
+		};
+		
+		return {
+			key,
+			value,
+			level,
+			isLast,
+			expanded,
+			getValueType,
+			getValuePreview,
+			isExpandable,
+			toggleExpanded
+		};
+	}
 
 	/**
 	 * Fetches log file content from AIMBY-API via proxy
@@ -200,6 +233,85 @@
 		// Sanitize content for safe display
 		return sanitizeDisplayContent(content);
 	}
+
+	function renderJsonTree(data: any, level: number = 0): string {
+		if (data === null) {
+			return '<span class="text-gray-500 dark:text-gray-400 italic">null</span>';
+		}
+		
+		if (typeof data === 'string') {
+			// Try to parse if it looks like JSON
+			try {
+				const parsed = JSON.parse(data);
+				return renderJsonTree(parsed, level);
+			} catch {
+				return `<span class="text-green-600 dark:text-green-400">"${escapeHtml(data)}"</span>`;
+			}
+		}
+		
+		if (typeof data === 'number') {
+			return `<span class="text-blue-600 dark:text-blue-400">${data}</span>`;
+		}
+		
+		if (typeof data === 'boolean') {
+			return `<span class="text-purple-600 dark:text-purple-400">${data}</span>`;
+		}
+		
+		if (Array.isArray(data)) {
+			if (data.length === 0) {
+				return '<span class="text-gray-500 dark:text-gray-400">[]</span>';
+			}
+			
+			const indent = '  '.repeat(level);
+			const childIndent = '  '.repeat(level + 1);
+			let html = `<div class="json-array">
+				<span class="text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 px-1 rounded" onclick="toggleJsonNode(this)">
+					<span class="json-toggle">▼</span> Array(${data.length})
+				</span>
+				<div class="json-children ml-4 border-l border-gray-200 dark:border-gray-700 pl-4">`;
+			
+			data.forEach((item, index) => {
+				html += `<div class="json-item py-1">
+					<span class="text-gray-500 dark:text-gray-400 text-sm">[${index}]:</span> 
+					${renderJsonTree(item, level + 1)}
+				</div>`;
+			});
+			
+			html += '</div></div>';
+			return html;
+		}
+		
+		if (typeof data === 'object') {
+			const keys = Object.keys(data);
+			if (keys.length === 0) {
+				return '<span class="text-gray-500 dark:text-gray-400">{}</span>';
+			}
+			
+			let html = `<div class="json-object">
+				<span class="text-gray-600 dark:text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 px-1 rounded" onclick="toggleJsonNode(this)">
+					<span class="json-toggle">▼</span> Object(${keys.length})
+				</span>
+				<div class="json-children ml-4 border-l border-gray-200 dark:border-gray-700 pl-4">`;
+			
+			keys.forEach(key => {
+				html += `<div class="json-item py-1">
+					<span class="text-red-600 dark:text-red-400 font-medium">"${escapeHtml(key)}"</span>: 
+					${renderJsonTree(data[key], level + 1)}
+				</div>`;
+			});
+			
+			html += '</div></div>';
+			return html;
+		}
+		
+		return `<span class="text-gray-500 dark:text-gray-400">${escapeHtml(String(data))}</span>`;
+	}
+
+	function escapeHtml(text: string): string {
+		const div = document.createElement('div');
+		div.textContent = text;
+		return div.innerHTML;
+	}
 </script>
 
 <svelte:head>
@@ -297,30 +409,60 @@
 					role="region"
 					aria-labelledby="file-info-heading"
 				>
-					<div class="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-						<h2 class="text-lg font-medium text-gray-900 dark:text-white" id="file-info-heading">File Information</h2>
+					<div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
+						<div class="flex items-center gap-3">
+							<div class="flex-shrink-0">
+								<div class="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center">
+									<svg class="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+									</svg>
+								</div>
+							</div>
+							<div>
+								<h2 class="text-lg font-semibold text-gray-900 dark:text-white" id="file-info-heading">File Information</h2>
+								<p class="text-sm text-gray-500 dark:text-gray-400">Log file details and metadata</p>
+							</div>
+						</div>
 					</div>
-					<div class="px-4 sm:px-6 py-4">
-						<dl class="grid grid-cols-1 md:grid-cols-3 gap-6">
-							<div>
-								<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Filename</dt>
-								<dd class="mt-1 text-sm text-gray-900 dark:text-white font-mono break-all" title={logContent.filename}>
+					<div class="px-6 py-6">
+						<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+							<div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+								<div class="flex items-center gap-3 mb-2">
+									<svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+									</svg>
+									<span class="text-sm font-medium text-gray-600 dark:text-gray-300">Filename</span>
+								</div>
+								<p class="text-sm font-mono text-gray-900 dark:text-white break-all bg-white dark:bg-gray-800 px-3 py-2 rounded border" title={logContent.filename}>
 									{logContent.filename}
-								</dd>
+								</p>
 							</div>
-							<div>
-								<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">File Size</dt>
-								<dd class="mt-1 text-sm text-gray-900 dark:text-white" title="File size: {formatFileSize(logContent.size)}">
+							<div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+								<div class="flex items-center gap-3 mb-2">
+									<svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+									</svg>
+									<span class="text-sm font-medium text-gray-600 dark:text-gray-300">File Size</span>
+								</div>
+								<p class="text-lg font-semibold text-gray-900 dark:text-white" title="File size: {formatFileSize(logContent.size)}">
 									{formatFileSize(logContent.size)}
-								</dd>
+								</p>
 							</div>
-							<div>
-								<dt class="text-sm font-medium text-gray-500 dark:text-gray-400">Modified Date</dt>
-								<dd class="mt-1 text-sm text-gray-900 dark:text-white" title="Last modified: {formatDate(logContent.modified)}">
+							<div class="bg-gray-50 dark:bg-gray-900/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+								<div class="flex items-center gap-3 mb-2">
+									<svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+									</svg>
+									<span class="text-sm font-medium text-gray-600 dark:text-gray-300">Last Modified</span>
+								</div>
+								<p class="text-sm font-medium text-gray-900 dark:text-white" title="Last modified: {formatDate(logContent.modified)}">
 									{formatDate(logContent.modified)}
-								</dd>
+								</p>
+								<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+									{dayjs(logContent.modified * 1000).fromNow()}
+								</p>
 							</div>
-						</dl>
+						</div>
 					</div>
 				</div>
 
@@ -328,68 +470,106 @@
 				<div
 					class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700"
 				>
-					<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+					<div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
 						<div class="flex items-center justify-between">
-							<h2 class="text-lg font-medium text-gray-900 dark:text-white">Log Content</h2>
-							<div class="flex items-center gap-2">
+							<div class="flex items-center gap-3">
+								<div class="flex-shrink-0">
+									<div class="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
+										<svg class="w-5 h-5 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+										</svg>
+									</div>
+								</div>
+								<div>
+									<h2 class="text-lg font-semibold text-gray-900 dark:text-white">Log Content</h2>
+									<p class="text-sm text-gray-500 dark:text-gray-400">Structured log data with interactive viewer</p>
+								</div>
+							</div>
+							<div class="flex items-center gap-3">
 								{#if isValidJSON(logContent.content)}
-									<span class="px-2 py-1 bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200 rounded-full text-xs">
+									<div class="flex items-center gap-2">
+										<button
+											on:click={() => viewMode = 'tree'}
+											class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors {viewMode === 'tree' ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}"
+										>
+											Tree View
+										</button>
+										<button
+											on:click={() => viewMode = 'raw'}
+											class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors {viewMode === 'raw' ? 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}"
+										>
+											Raw JSON
+										</button>
+									</div>
+									<span class="px-2 py-1 bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200 rounded-full text-xs font-medium">
 										JSON Format
 									</span>
 								{:else}
-									<span class="px-2 py-1 bg-gray-100 dark:bg-gray-900/20 text-gray-800 dark:text-gray-200 rounded-full text-xs">
+									<span class="px-2 py-1 bg-gray-100 dark:bg-gray-900/20 text-gray-800 dark:text-gray-200 rounded-full text-xs font-medium">
 										Plain Text
 									</span>
 								{/if}
 							</div>
 						</div>
 					</div>
-					<div class="px-6 py-4">
+					<div class="px-6 py-6">
 						{#if logContent.content}
 							<div class="relative">
-								{#if isValidJSON(logContent.content)}
-									<!-- JSON content with syntax highlighting -->
-									<pre
-										bind:this={contentElement}
-										class="hljs text-xs sm:text-sm bg-gray-50 dark:bg-gray-900 p-3 sm:p-4 rounded-lg overflow-auto max-h-96 lg:max-h-[32rem] border border-gray-200 dark:border-gray-700 font-mono leading-relaxed"
-										style="white-space: pre-wrap; word-wrap: break-word;"
-									><code class="language-json">{formatContent(logContent.content)}</code></pre>
+								{#if isValidJSON(logContent.content) && viewMode === 'tree'}
+									<!-- Hierarchical JSON Tree View -->
+									<div class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+										<div class="max-h-96 lg:max-h-[32rem] overflow-auto">
+											<div class="p-4">
+												{@html renderJsonTree(logContent.content)}
+											</div>
+										</div>
+									</div>
+								{:else if isValidJSON(logContent.content) && viewMode === 'raw'}
+									<!-- Raw JSON with syntax highlighting -->
+									<div class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+										<pre class="text-xs sm:text-sm p-4 overflow-auto max-h-96 lg:max-h-[32rem] text-gray-900 dark:text-white font-mono leading-relaxed" style="white-space: pre-wrap; word-wrap: break-word;"><code class="language-json">{formatContent(logContent.content)}</code></pre>
+									</div>
 								{:else}
 									<!-- Plain text content -->
-									<pre
-										class="text-xs sm:text-sm bg-gray-50 dark:bg-gray-900 p-3 sm:p-4 rounded-lg overflow-auto max-h-96 lg:max-h-[32rem] text-gray-900 dark:text-white border border-gray-200 dark:border-gray-700 font-mono leading-relaxed"
-										style="white-space: pre-wrap; word-wrap: break-word;"
-									>{formatContent(logContent.content)}</pre>
+									<div class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+										<pre class="text-xs sm:text-sm p-4 overflow-auto max-h-96 lg:max-h-[32rem] text-gray-900 dark:text-white font-mono leading-relaxed" style="white-space: pre-wrap; word-wrap: break-word;">{formatContent(logContent.content)}</pre>
+									</div>
 								{/if}
 								
-												<!-- Copy button -->
-								<button
-									class="absolute top-2 right-2 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-									on:click={async () => {
-										try {
-											const contentToCopy = formatContent(logContent.content);
-											if (contentToCopy.length > 100000) {
-												toast.error('Content too large to copy to clipboard');
-												return;
+								<!-- Action buttons -->
+								<div class="absolute top-3 right-3 flex gap-2">
+									<button
+										class="p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-sm"
+										on:click={async () => {
+											try {
+												const contentToCopy = formatContent(logContent.content);
+												if (contentToCopy.length > 100000) {
+													toast.error('Content too large to copy to clipboard');
+													return;
+												}
+												await navigator.clipboard.writeText(contentToCopy);
+												toast.success('Content copied to clipboard');
+											} catch (err) {
+												console.error('Failed to copy to clipboard:', err);
+												toast.error('Failed to copy content to clipboard');
 											}
-											await navigator.clipboard.writeText(contentToCopy);
-											toast.success('Content copied to clipboard');
-										} catch (err) {
-											console.error('Failed to copy to clipboard:', err);
-											toast.error('Failed to copy content to clipboard');
-										}
-									}}
-									title="Copy log content to clipboard"
-									aria-label="Copy log content to clipboard"
-								>
-									<svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-									</svg>
-								</button>
+										}}
+										title="Copy log content to clipboard"
+										aria-label="Copy log content to clipboard"
+									>
+										<svg class="w-4 h-4 text-gray-600 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+										</svg>
+									</button>
+								</div>
 							</div>
 						{:else}
-							<div class="text-center py-8 text-gray-500 dark:text-gray-400" role="status">
-								No content available for this log file
+							<div class="text-center py-12 text-gray-500 dark:text-gray-400" role="status">
+								<svg class="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+								</svg>
+								<p class="text-lg font-medium">No content available</p>
+								<p class="text-sm">This log file appears to be empty or unreadable</p>
 							</div>
 						{/if}
 					</div>
@@ -449,3 +629,58 @@
 		{/if}
 	</div>
 </div>
+
+<script>
+	// Global function for toggling JSON tree nodes
+	if (typeof window !== 'undefined') {
+		window.toggleJsonNode = function(element) {
+			const children = element.parentElement.querySelector('.json-children');
+			const toggle = element.querySelector('.json-toggle');
+			
+			if (children.style.display === 'none') {
+				children.style.display = 'block';
+				toggle.textContent = '▼';
+			} else {
+				children.style.display = 'none';
+				toggle.textContent = '▶';
+			}
+		};
+	}
+</script>
+
+<style>
+	:global(.json-array), :global(.json-object) {
+		font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+		font-size: 0.875rem;
+		line-height: 1.5;
+	}
+	
+	:global(.json-toggle) {
+		display: inline-block;
+		width: 12px;
+		text-align: center;
+		user-select: none;
+		transition: transform 0.2s ease;
+	}
+	
+	:global(.json-item) {
+		transition: background-color 0.2s ease;
+	}
+	
+	:global(.json-item:hover) {
+		background-color: rgba(0, 0, 0, 0.02);
+	}
+	
+	:global(.dark .json-item:hover) {
+		background-color: rgba(255, 255, 255, 0.02);
+	}
+	
+	:global(.json-children) {
+		animation: fadeIn 0.2s ease-in-out;
+	}
+	
+	@keyframes fadeIn {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+</style>
