@@ -16,22 +16,37 @@
 	let batchDetails: any = null;
 	let loadingDetails = false;
 
+	// Pagination variables
+	let currentPage = 1;
+	let totalPages = 1;
+	let pageSize = 10;
+	const pageSizeOptions = [5, 10, 25, 50, 100];
+
 	// File audit variables
 	let filename = '';
 	let fileAuditResult: FileAuditResponse | null = null;
 	let loadingFileAudit = false;
 
-	const countOptions = [5, 10, 25, 50, 100];
+	// Modal state for future features
+	let showFeatureModal = false;
+	let modalMessage = '';
+
+	// Reactive statements for pagination
+	$: totalPages = Math.ceil(totalCount / pageSize);
+	$: startIndex = (currentPage - 1) * pageSize;
+	$: endIndex = Math.min(startIndex + pageSize, totalCount);
+	$: displayedBatches = batches.slice(startIndex, endIndex);
 
 	async function fetchBatches() {
 		loading = true;
 		try {
 			const token = localStorage.token || '';
-			const response = await getBatchesViaProxy(token, selectedCount);
+			// Use pageSize instead of selectedCount for consistency
+			const response = await getBatchesViaProxy(token, pageSize);
 			if (response) {
 				batches = response.batches;
 				totalCount = response.total_count;
-				toast.success(`Retrieved ${batches.length} batches`);
+				toast.success(`Retrieved ${batches.length} batches (Total: ${totalCount})`);
 			} else {
 				toast.error('Failed to retrieve batches');
 			}
@@ -117,6 +132,46 @@
 		} finally {
 			loadingFileAudit = false;
 		}
+	}
+
+	// Pagination functions
+	function goToPage(page: number) {
+		if (page >= 1 && page <= totalPages) {
+			currentPage = page;
+		}
+	}
+
+	function goToFirstPage() {
+		goToPage(1);
+	}
+
+	function goToLastPage() {
+		goToPage(totalPages);
+	}
+
+	function goToPreviousPage() {
+		goToPage(currentPage - 1);
+	}
+
+	function goToNextPage() {
+		goToPage(currentPage + 1);
+	}
+
+	function onPageSizeChange() {
+		selectedCount = pageSize; // Keep selectedCount in sync
+		currentPage = 1; // Reset to first page when changing page size
+		fetchBatches();
+	}
+
+	// Modal functions for future features
+	function showFutureFeatureModal(message: string) {
+		modalMessage = message;
+		showFeatureModal = true;
+	}
+
+	function closeFeatureModal() {
+		showFeatureModal = false;
+		modalMessage = '';
 	}
 
 	onMount(() => {
@@ -242,43 +297,29 @@
 	<!-- Controls Section -->
 	<div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
 		<div class="flex items-center gap-4">
-			<label for="batch-count" class="text-sm font-medium text-gray-700 dark:text-gray-300">
-				Batch Count:
+			<label for="page-size" class="text-sm font-medium text-gray-700 dark:text-gray-300">
+				Page Size:
 			</label>
 			<select
-				id="batch-count"
-				bind:value={selectedCount}
-				on:change={fetchBatches}
+				id="page-size"
+				bind:value={pageSize}
+				on:change={onPageSizeChange}
 				class="block w-20 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white text-sm focus:border-blue-500 focus:ring-blue-500"
 			>
-				{#each countOptions as option}
+				{#each pageSizeOptions as option}
 					<option value={option}>{option}</option>
 				{/each}
 			</select>
 		</div>
 
-		<button
-			on:click={fetchBatches}
-			disabled={loading}
-			class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-		>
-			{#if loading}
-				<svg
-					class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-				>
-					<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
-					></circle>
-					<path
-						class="opacity-75"
-						fill="currentColor"
-						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-					></path>
-				</svg>
-				Loading...
-			{:else}
+		<div class="flex gap-2">
+			<button
+				on:click={() =>
+					showFutureFeatureModal(
+						'Advanced filtering and search capabilities will be available in a future update.'
+					)}
+				class="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md shadow-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+			>
 				<svg
 					class="-ml-1 mr-2 h-5 w-5"
 					xmlns="http://www.w3.org/2000/svg"
@@ -287,19 +328,57 @@
 				>
 					<path
 						fill-rule="evenodd"
-						d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+						d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
 						clip-rule="evenodd"
 					/>
 				</svg>
-				Refresh Batches
-			{/if}
-		</button>
+				Filter & Search
+			</button>
+
+			<button
+				on:click={fetchBatches}
+				disabled={loading}
+				class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+			>
+				{#if loading}
+					<svg
+						class="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+					>
+						<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"
+						></circle>
+						<path
+							class="opacity-75"
+							fill="currentColor"
+							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+						></path>
+					</svg>
+					Loading...
+				{:else}
+					<svg
+						class="-ml-1 mr-2 h-5 w-5"
+						xmlns="http://www.w3.org/2000/svg"
+						viewBox="0 0 20 20"
+						fill="currentColor"
+					>
+						<path
+							fill-rule="evenodd"
+							d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z"
+							clip-rule="evenodd"
+						/>
+					</svg>
+					Refresh Batches
+				{/if}
+			</button>
+		</div>
 	</div>
 
 	<!-- Stats Section -->
 	<div class="bg-white dark:bg-gray-800 overflow-hidden shadow rounded-lg">
 		<div class="px-4 py-5 sm:p-6">
-			<dl class="grid grid-cols-1 gap-5 sm:grid-cols-3">
+			<dl class="grid grid-cols-1 gap-5 sm:grid-cols-4">
 				<div class="px-4 py-5 bg-gray-50 dark:bg-gray-700 rounded-lg overflow-hidden sm:p-6">
 					<dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
 						Total Batches
@@ -309,18 +388,179 @@
 				<div class="px-4 py-5 bg-gray-50 dark:bg-gray-700 rounded-lg overflow-hidden sm:p-6">
 					<dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Displayed</dt>
 					<dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">
-						{batches.length}
+						{displayedBatches.length}
 					</dd>
 				</div>
 				<div class="px-4 py-5 bg-gray-50 dark:bg-gray-700 rounded-lg overflow-hidden sm:p-6">
+					<dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Page Size</dt>
+					<dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">{pageSize}</dd>
+				</div>
+				<div class="px-4 py-5 bg-gray-50 dark:bg-gray-700 rounded-lg overflow-hidden sm:p-6">
 					<dt class="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">
-						Selected Count
+						Current Page
 					</dt>
-					<dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">{selectedCount}</dd>
+					<dd class="mt-1 text-3xl font-semibold text-gray-900 dark:text-white">
+						{currentPage} / {totalPages}
+					</dd>
 				</div>
 			</dl>
 		</div>
 	</div>
+
+	<!-- Pagination Controls -->
+	{#if totalPages > 1}
+		<div class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-lg">
+			<div
+				class="px-4 py-3 flex items-center justify-between border-t border-gray-200 dark:border-gray-700 sm:px-6"
+			>
+				<div class="flex-1 flex justify-between sm:hidden">
+					<button
+						on:click={goToPreviousPage}
+						disabled={currentPage === 1}
+						class="relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						Previous
+					</button>
+					<button
+						on:click={goToNextPage}
+						disabled={currentPage === totalPages}
+						class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						Next
+					</button>
+				</div>
+				<div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+					<div>
+						<p class="text-sm text-gray-700 dark:text-gray-300">
+							Showing <span class="font-medium">{startIndex + 1}</span> to
+							<span class="font-medium">{endIndex}</span>
+							of{' '}
+							<span class="font-medium">{totalCount}</span> results
+						</p>
+					</div>
+					<div>
+						<nav
+							class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px"
+							aria-label="Pagination"
+						>
+							<button
+								on:click={goToFirstPage}
+								disabled={currentPage === 1}
+								class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								<span class="sr-only">First</span>
+								<svg
+									class="h-5 w-5"
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 20 20"
+									fill="currentColor"
+								>
+									<path
+										fill-rule="evenodd"
+										d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+										clip-rule="evenodd"
+									/>
+									<path
+										fill-rule="evenodd"
+										d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+							</button>
+							<button
+								on:click={goToPreviousPage}
+								disabled={currentPage === 1}
+								class="relative inline-flex items-center px-2 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								<span class="sr-only">Previous</span>
+								<svg
+									class="h-5 w-5"
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 20 20"
+									fill="currentColor"
+								>
+									<path
+										fill-rule="evenodd"
+										d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+							</button>
+
+							<!-- Page Numbers -->
+							{#each Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+								let pageNum;
+								if (totalPages <= 5) {
+									pageNum = i + 1;
+								} else if (currentPage <= 3) {
+									pageNum = i + 1;
+								} else if (currentPage >= totalPages - 2) {
+									pageNum = totalPages - 4 + i;
+								} else {
+									pageNum = currentPage - 2 + i;
+								}
+								return pageNum;
+							}) as pageNum}
+								<button
+									on:click={() => goToPage(pageNum)}
+									class="relative inline-flex items-center px-4 py-2 border text-sm font-medium {currentPage ===
+									pageNum
+										? 'z-10 bg-blue-50 dark:bg-blue-900 border-blue-500 text-blue-600 dark:text-blue-400'
+										: 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600'}"
+								>
+									{pageNum}
+								</button>
+							{/each}
+
+							<button
+								on:click={goToNextPage}
+								disabled={currentPage === totalPages}
+								class="relative inline-flex items-center px-2 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								<span class="sr-only">Next</span>
+								<svg
+									class="h-5 w-5"
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 20 20"
+									fill="currentColor"
+								>
+									<path
+										fill-rule="evenodd"
+										d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+							</button>
+							<button
+								on:click={goToLastPage}
+								disabled={currentPage === totalPages}
+								class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								<span class="sr-only">Last</span>
+								<svg
+									class="h-5 w-5"
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 20 20"
+									fill="currentColor"
+								>
+									<path
+										fill-rule="evenodd"
+										d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+										clip-rule="evenodd"
+									/>
+									<path
+										fill-rule="evenodd"
+										d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
+										clip-rule="evenodd"
+									/>
+								</svg>
+							</button>
+						</nav>
+					</div>
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<!-- Batches List Section -->
 	<div class="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
@@ -350,7 +590,7 @@
 						</svg>
 					</div>
 				</li>
-			{:else if batches.length === 0}
+			{:else if displayedBatches.length === 0}
 				<li class="px-6 py-4">
 					<div class="text-center text-gray-500 dark:text-gray-400">
 						<svg
@@ -373,7 +613,7 @@
 					</div>
 				</li>
 			{:else}
-				{#each batches as batch (batch.batch_id)}
+				{#each displayedBatches as batch (batch.batch_id)}
 					<li
 						class="px-6 py-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors duration-150"
 						on:click={() => selectBatch(batch)}
@@ -498,3 +738,52 @@
 		</div>
 	{/if}
 </div>
+
+<!-- Future Feature Modal -->
+{#if showFeatureModal}
+	<div
+		class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50"
+		on:click={closeFeatureModal}
+	>
+		<div
+			class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white dark:bg-gray-800"
+		>
+			<div class="mt-3 text-center">
+				<div
+					class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900"
+				>
+					<svg
+						class="h-6 w-6 text-blue-600 dark:text-blue-400"
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</svg>
+				</div>
+				<h3 class="text-lg leading-6 font-medium text-gray-900 dark:text-white mt-4">
+					Coming Soon
+				</h3>
+				<div class="mt-2 px-7 py-3">
+					<p class="text-sm text-gray-500 dark:text-gray-400">
+						{modalMessage}
+					</p>
+				</div>
+				<div class="items-center px-4 py-3">
+					<button
+						on:click={closeFeatureModal}
+						class="px-4 py-2 bg-blue-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-300"
+					>
+						Got it!
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}

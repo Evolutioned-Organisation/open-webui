@@ -1,5 +1,6 @@
 import {
 	validateFilename,
+	validateFilePath,
 	sanitizeUrlParameter,
 	validateNumericParameter
 } from '$lib/utils/validation';
@@ -303,10 +304,10 @@ export const getLogsViaProxy = async (
 /**
  * Retrieves specific log file content from AIMBY-API via Open-WebUI proxy
  *
- * This function fetches the content of a specific log file from the AIMBY-API
- * service through the Open-WebUI backend proxy. It includes comprehensive
- * filename validation to prevent path traversal attacks, content sanitization,
- * and structured error handling with retry mechanisms.
+ * This function fetches the full content of a specific log file from the AIMBY-API
+ * service through the Open-WebUI backend proxy. It first gets file info, then downloads
+ * the full content. Includes comprehensive filename validation to prevent path traversal
+ * attacks, content sanitization, and structured error handling with retry mechanisms.
  *
  * @param token - Authentication token for API access
  * @param filename - Name of the log file to retrieve (must pass validation)
@@ -332,9 +333,9 @@ export const getLogContentViaProxy = async (
 			throw new Error('Invalid token provided');
 		}
 
-		// Comprehensive filename validation
-		if (!validateFilename(filename)) {
-			throw new Error(`Invalid filename: ${filename}`);
+		// Comprehensive file path validation
+		if (!validateFilePath(filename)) {
+			throw new Error(`Invalid file path: ${filename}`);
 		}
 
 		// Sanitize filename for URL encoding
@@ -343,10 +344,9 @@ export const getLogContentViaProxy = async (
 			throw new Error(`Filename failed sanitization: ${filename}`);
 		}
 
-		// Use the /info endpoint to get file info with content preview
-		const infoUrl = `${AIMBY_PROXY_BASE}/api/v1/logs/${encodeURIComponent(sanitizedFilename)}/info`;
-
-		console.log('Fetching log content from:', infoUrl);
+		// First, get file info for metadata
+		const infoUrl = `${AIMBY_PROXY_BASE}/api/v1/logs/info?filename=${encodeURIComponent(sanitizedFilename)}`;
+		console.log('Fetching log file info from:', infoUrl);
 
 		const infoRes = await fetch(infoUrl, {
 			method: 'GET',
@@ -357,7 +357,6 @@ export const getLogContentViaProxy = async (
 			}
 		});
 
-		// Check if response is ok
 		if (!infoRes.ok) {
 			const errorText = await infoRes.text();
 			console.error('API Error Response:', {
@@ -387,13 +386,43 @@ export const getLogContentViaProxy = async (
 			throw new Error('Response filename mismatch');
 		}
 
-		// Return the file info with content_preview as content
+		// Now get the full file content using the /content endpoint
+		const contentUrl = `${AIMBY_PROXY_BASE}/api/v1/logs/content?filename=${encodeURIComponent(sanitizedFilename)}`;
+		console.log('Fetching full log content from:', contentUrl);
+
+		const contentRes = await fetch(contentUrl, {
+			method: 'GET',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			}
+		});
+
+		if (!contentRes.ok) {
+			const errorText = await contentRes.text();
+			console.error('Content Error Response:', {
+				status: contentRes.status,
+				statusText: contentRes.statusText,
+				body: errorText
+			});
+			throw new Error(`Failed to fetch log content: ${contentRes.status} ${contentRes.statusText}`);
+		}
+
+		const contentData = (await contentRes.json()) as Record<string, unknown>;
+
+		// Validate content response structure
+		if (!contentData || typeof contentData !== 'object') {
+			throw new Error('Invalid content response format');
+		}
+
+		// Return the complete log content with metadata
 		return {
-			filename: fileInfo.filename as string,
-			size: typeof fileInfo.size === 'number' ? fileInfo.size : 0,
-			modified: typeof fileInfo.modified === 'number' ? fileInfo.modified : 0,
-			content: (fileInfo.content_preview as string[] | Record<string, unknown>) || [],
-			timestamp: fileInfo.timestamp as string
+			filename: contentData.filename as string,
+			size: typeof contentData.size === 'number' ? contentData.size : 0,
+			modified: typeof contentData.modified === 'number' ? contentData.modified : 0,
+			content: (contentData.content as string[] | Record<string, unknown>) || [],
+			timestamp: contentData.timestamp as string
 		};
 	} catch (err) {
 		console.error('Error in getLogContentViaProxy:', err);

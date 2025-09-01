@@ -13,8 +13,7 @@ const packages = [
 	'tiktoken',
 	'seaborn',
 	'pytz',
-	'black',
-	'openai'
+	'black'
 ];
 
 import { loadPyodide } from 'pyodide';
