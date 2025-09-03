@@ -7,7 +7,7 @@
 		if (!entry) return false;
 
 		// Check for explicit query type
-		if (entry.query_type === 'entity_discovery') return true;
+		if (entry.query_type === 'entity_discovery' || entry.query_type === 'claim_discovery') return true;
 
 		// Check message content for Cypher keywords
 		const message = entry.message || entry.msg || entry.text || '';

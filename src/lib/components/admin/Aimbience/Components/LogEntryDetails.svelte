@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { createEventDispatcher } from 'svelte';
 	import KeyValueTable from './KeyValueTable.svelte';
-	import CypherQuery from './CypherQuery.svelte';
+	import CypherQuerySection from './CypherQuerySection.svelte';
 	import GenericLogEntry from './GenericLogEntry.svelte';
 	import { isCypherQuery, extractKeyValuePairs, type LogEntry } from '$lib/utils/log-utils';
 
@@ -69,7 +69,7 @@
 	<!-- Component Loader: Route to appropriate component based on entry type -->
 	{#if isCypher}
 		<!-- Cypher Query Entry -->
-		<CypherQuery {entry} />
+		<CypherQuerySection {entry} />
 	{:else if hasAdditionalData}
 		<!-- Generic Log Entry with Additional Data -->
 		<GenericLogEntry {entry} />
