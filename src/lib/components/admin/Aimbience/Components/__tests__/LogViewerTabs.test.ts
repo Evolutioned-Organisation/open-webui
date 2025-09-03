@@ -15,19 +15,18 @@ describe('LogViewerTabs', () => {
 		});
 
 		expect(getByText('Timeline')).toBeInTheDocument();
-		expect(getByText('Tree View')).toBeInTheDocument();
 		expect(getByText('Raw JSON')).toBeInTheDocument();
 	});
 
 	it('should highlight the current active tab', () => {
 		const { getByText } = render(LogViewerTabs, {
 			props: {
-				currentViewMode: 'tree'
+				currentViewMode: 'raw'
 			}
 		});
 
-		const treeTab = getByText('Tree View').closest('button');
-		expect(treeTab).toHaveClass('border-blue-500', 'text-blue-600');
+		const rawTab = getByText('Raw JSON').closest('button');
+		expect(rawTab).toHaveClass('border-blue-500', 'text-blue-600');
 	});
 
 	it('should emit tabChange event when tab is clicked', async () => {
@@ -40,10 +39,10 @@ describe('LogViewerTabs', () => {
 		const tabChangeHandler = vi.fn();
 		component.$on('tabChange', tabChangeHandler);
 
-		await fireEvent.click(getByText('Tree View'));
+		await fireEvent.click(getByText('Raw JSON'));
 		expect(tabChangeHandler).toHaveBeenCalledWith(
 			expect.objectContaining({
-				detail: { viewMode: 'tree' }
+				detail: { viewMode: 'raw' }
 			})
 		);
 	});

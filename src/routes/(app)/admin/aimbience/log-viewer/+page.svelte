@@ -22,7 +22,6 @@
 	import LogViewerTabs from '$lib/components/admin/Aimbience/Components/LogViewerTabs.svelte';
 	import LogViewerError from '$lib/components/admin/Aimbience/Components/LogViewerError.svelte';
 	import LogTimeline from '$lib/components/admin/Aimbience/Components/LogTimeline.svelte';
-	import LogTree from '$lib/components/admin/Aimbience/Components/LogTree.svelte';
 	import LogRaw from '$lib/components/admin/Aimbience/Components/LogRaw.svelte';
 
 	// State management
@@ -30,7 +29,7 @@
 	let error: string | null = null;
 	let filename = '';
 	let logContent: LogContentResponse | null = null;
-	let viewMode: 'timeline' | 'tree' | 'raw' = 'timeline';
+	let viewMode: 'timeline' | 'raw' = 'timeline';
 	let selectedEntry: number | null = null;
 	let isRetrying = false;
 
@@ -180,9 +179,6 @@
 								on:entrySelect={handleEntrySelect}
 								on:entryDeselect={handleEntryDeselect}
 							/>
-						{:else if isValidJSON(logContent.content) && viewMode === 'tree'}
-							<!-- Tree View -->
-							<LogTree logContent={logContent.content} />
 						{:else if viewMode === 'raw'}
 							<!-- Raw View -->
 							<LogRaw logContent={logContent.content} />

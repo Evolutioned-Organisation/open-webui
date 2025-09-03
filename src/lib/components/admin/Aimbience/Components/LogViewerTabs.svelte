@@ -3,11 +3,11 @@
 
 	// Event dispatcher for parent communication
 	const dispatch = createEventDispatcher<{
-		tabChange: { viewMode: 'timeline' | 'tree' | 'raw' };
+		tabChange: { viewMode: 'timeline' | 'raw' };
 	}>();
 
 	// Props
-	export let currentViewMode: 'timeline' | 'tree' | 'raw' = 'timeline';
+	export let currentViewMode: 'timeline' | 'raw' = 'timeline';
 
 	// Tab definitions
 	const tabs = [
@@ -18,12 +18,6 @@
 			description: 'Interactive timeline view of log entries'
 		},
 		{
-			id: 'tree' as const,
-			label: 'Tree View',
-			icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z',
-			description: 'Hierarchical tree structure of log data'
-		},
-		{
 			id: 'raw' as const,
 			label: 'Raw JSON',
 			icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z',
@@ -32,7 +26,7 @@
 	];
 
 	// Event handlers
-	function handleTabClick(viewMode: 'timeline' | 'tree' | 'raw') {
+	function handleTabClick(viewMode: 'timeline' | 'raw') {
 		if (viewMode !== currentViewMode) {
 			dispatch('tabChange', { viewMode });
 		}

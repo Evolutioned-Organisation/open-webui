@@ -1,4 +1,4 @@
-import { render, fireEvent, screen } from '@testing-library/svelte';
+, not goimport { render, fireEvent, screen } from '@testing-library/svelte';
 import { vi } from 'vitest';
 import LogTree from '../LogTree.svelte';
 

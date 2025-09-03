@@ -1,3 +1,14 @@
+<!-- Type definitions -->
+<script lang="ts" context="module">
+	export interface TreeNode {
+		key: string;
+		label: string;
+		value: any;
+		type: string;
+		children: TreeNode[];
+	}
+</script>
+
 <script lang="ts">
 	import { isValidJSON } from '$lib/utils/log-utils';
 
@@ -9,6 +20,124 @@
 
 	// Computed values
 	$: isValid = isValidJSON(logContent);
+	$: treeData = buildTreeStructure(logContent);
+
+	// Build a proper tree structure from the log content
+	function buildTreeStructure(data: any): TreeNode {
+		if (Array.isArray(data)) {
+			// For arrays, create a root node with each item as a child
+			return {
+				key: 'root',
+				label: 'Log Entries',
+				value: null,
+				type: 'array',
+				children: data.map((item, index) => {
+					const message = item.message || item.msg || item.text || `Entry ${index + 1}`;
+					return {
+						key: `entry_${index}`,
+						label: message,
+						value: item,
+						type: 'object',
+						children: buildObjectChildren(item, `entry_${index}`)
+					};
+				})
+			};
+		} else if (typeof data === 'object' && data !== null) {
+			// For single objects, create a root node with the object as a child
+			return {
+				key: 'root',
+				label: 'Log Data',
+				value: null,
+				type: 'object',
+				children: buildObjectChildren(data, 'root')
+			};
+		} else {
+			// For primitive values
+			return {
+				key: 'root',
+				label: 'Value',
+				value: data,
+				type: typeof data,
+				children: []
+			};
+		}
+	}
+
+	// Build children for an object
+	function buildObjectChildren(obj: any, parentPath: string): TreeNode[] {
+		return Object.entries(obj).map(([key, value]) => {
+			const path = `${parentPath}.${key}`;
+			const nodeType = getNodeType(value);
+
+			return {
+				key: path,
+				label: key,
+				value: value,
+				type: nodeType.type,
+				children: nodeType.hasChildren ? buildValueChildren(value, path) : []
+			};
+		});
+	}
+
+	// Build children for arrays and nested objects
+	function buildValueChildren(value: any, parentPath: string): TreeNode[] {
+		if (Array.isArray(value)) {
+			return value.map((item, index) => {
+				const path = `${parentPath}[${index}]`;
+				const nodeType = getNodeType(item);
+
+				return {
+					key: path,
+					label: `[${index}]`,
+					value: item,
+					type: nodeType.type,
+					children: nodeType.hasChildren ? buildValueChildren(item, path) : []
+				};
+			});
+		} else if (typeof value === 'object' && value !== null) {
+			return Object.entries(value).map(([key, val]) => {
+				const path = `${parentPath}.${key}`;
+				const nodeType = getNodeType(val);
+
+				return {
+					key: path,
+					label: key,
+					value: val,
+					type: nodeType.type,
+					children: nodeType.hasChildren ? buildValueChildren(val, path) : []
+				};
+			});
+		}
+		return [];
+	}
+
+	// Get node type and properties
+	function getNodeType(data: any): { type: string; hasChildren: boolean } {
+		if (data === null || data === undefined) return { type: 'null', hasChildren: false };
+		if (typeof data === 'string') return { type: 'string', hasChildren: false };
+		if (typeof data === 'number') return { type: 'number', hasChildren: false };
+		if (typeof data === 'boolean') return { type: 'boolean', hasChildren: false };
+		if (Array.isArray(data)) return { type: 'array', hasChildren: data.length > 0 };
+		if (typeof data === 'object') {
+			const keys = Object.keys(data);
+			return { type: 'object', hasChildren: keys.length > 0 };
+		}
+		return { type: 'unknown', hasChildren: false };
+	}
+
+	// Format value for display
+	function formatValue(data: any): string {
+		if (data === null) return 'null';
+		if (data === undefined) return 'undefined';
+		if (typeof data === 'string') return `"${data}"`;
+		if (typeof data === 'number' || typeof data === 'boolean') return String(data);
+		if (Array.isArray(data)) return `Array(${data.length})`;
+		if (typeof data === 'object') {
+			const keys = Object.keys(data);
+			return `Object(${keys.length})`;
+		}
+		return String(data);
+	}
 
 	// Toggle node collapse state
 	function toggleNode(path: string) {
@@ -25,38 +154,34 @@
 		return collapsedNodes.has(path);
 	}
 
-	// Helper to get collapsed state
-	function getCollapsedState(path: string): boolean {
-		return collapsedNodes.has(path);
+	// Get icon for node type
+	function getNodeIcon(type: string): string {
+		const icons = {
+			string: '📝',
+			number: '🔢',
+			boolean: '✓',
+			array: '📋',
+			object: '📦',
+			null: '○',
+			undefined: '○',
+			unknown: '?'
+		};
+		return icons[type] || '?';
 	}
 
-	// Get node type and icon
-	function getNodeType(data: any): { type: string; icon: string; hasChildren: boolean } {
-		if (data === null) return { type: 'null', icon: '○', hasChildren: false };
-		if (data === undefined) return { type: 'undefined', icon: '○', hasChildren: false };
-		if (typeof data === 'string') return { type: 'string', icon: '📝', hasChildren: false };
-		if (typeof data === 'number') return { type: 'number', icon: '🔢', hasChildren: false };
-		if (typeof data === 'boolean') return { type: 'boolean', icon: '✓', hasChildren: false };
-		if (Array.isArray(data)) return { type: 'array', icon: '📋', hasChildren: data.length > 0 };
-		if (typeof data === 'object') {
-			const keys = Object.keys(data);
-			return { type: 'object', icon: '📦', hasChildren: keys.length > 0 };
-		}
-		return { type: 'unknown', icon: '?', hasChildren: false };
-	}
+	// Render a tree node
+	function renderTreeNode(node: TreeNode, depth: number = 0) {
+		const nodeIsCollapsed = isCollapsed(node.key);
+		const hasChildren = node.children && node.children.length > 0;
+		const indent = depth * 20; // 20px per level
 
-	// Format value for display
-	function formatValue(data: any): string {
-		if (data === null) return 'null';
-		if (data === undefined) return 'undefined';
-		if (typeof data === 'string') return `"${data}"`;
-		if (typeof data === 'number' || typeof data === 'boolean') return String(data);
-		if (Array.isArray(data)) return `Array(${data.length})`;
-		if (typeof data === 'object') {
-			const keys = Object.keys(data);
-			return `Object(${keys.length})`;
-		}
-		return String(data);
+		return {
+			node,
+			depth,
+			isCollapsed: nodeIsCollapsed,
+			hasChildren,
+			indent
+		};
 	}
 </script>
 
@@ -88,25 +213,63 @@
 		</div>
 		<div class="p-4 max-h-96 overflow-auto">
 			<div class="font-mono text-sm">
-				{#if Array.isArray(logContent)}
-					<!-- Handle array of log entries -->
-					{#each logContent as entry, index}
-						{@const message = entry.message || entry.msg || entry.text || `Entry ${index + 1}`}
-						{@const nodeType = getNodeType(entry)}
-						{@const path = `entry_${index}`}
-						{@const isCollapsed = getCollapsedState(path)}
-						<div
-							class="mb-4 p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
+				<!-- Root node -->
+				<div class="flex items-start gap-2 py-1">
+					{#if treeData.children && treeData.children.length > 0}
+						<button
+							class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+							on:click={() => toggleNode(treeData.key)}
+							aria-label={isCollapsed(treeData.key) ? 'Expand' : 'Collapse'}
 						>
-							<div class="flex items-start gap-2 py-1">
-								<!-- Toggle button -->
-								{#if nodeType.hasChildren}
+							{#if isCollapsed(treeData.key)}
+								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M9 5l7 7-7 7"
+									/>
+								</svg>
+							{:else}
+								<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d="M19 9l-7 7-7-7"
+									/>
+								</svg>
+							{/if}
+						</button>
+					{:else}
+						<div class="w-4"></div>
+					{/if}
+
+					<span class="text-lg font-semibold text-gray-900 dark:text-white">
+						{getNodeIcon(treeData.type)}
+						{treeData.label}
+					</span>
+					{#if treeData.children && treeData.children.length > 0}
+						<span class="text-sm text-gray-500 dark:text-gray-400">
+							({treeData.children.length}
+							{treeData.children.length === 1 ? 'item' : 'items'})
+						</span>
+					{/if}
+				</div>
+
+				<!-- Children nodes -->
+				{#if treeData.children && treeData.children.length > 0 && !isCollapsed(treeData.key)}
+					<div class="ml-4">
+						{#each treeData.children as child}
+							{@const nodeInfo = renderTreeNode(child, 1)}
+							<div class="flex items-start gap-2 py-1" style="margin-left: {nodeInfo.indent}px;">
+								{#if nodeInfo.hasChildren}
 									<button
 										class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-										on:click={() => toggleNode(path)}
-										aria-label={isCollapsed ? 'Expand' : 'Collapse'}
+										on:click={() => toggleNode(child.key)}
+										aria-label={nodeInfo.isCollapsed ? 'Expand' : 'Collapse'}
 									>
-										{#if isCollapsed}
+										{#if nodeInfo.isCollapsed}
 											<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 												<path
 													stroke-linecap="round"
@@ -130,280 +293,164 @@
 									<div class="w-4"></div>
 								{/if}
 
-								<!-- Message as main node name -->
-								<div class="flex-1">
-									<div class="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-										{message}
-									</div>
-									{#if !isCollapsed}
-										<div class="ml-4 space-y-1">
-											{#each Object.entries(entry) as [key, value]}
-												{#if key !== 'message' && key !== 'msg' && key !== 'text'}
-													{@const subType = getNodeType(value)}
-													{@const subPath = `${path}.${key}`}
-													{@const subCollapsed = getCollapsedState(subPath)}
-													<div class="flex items-start gap-1 py-1">
-														{#if subType.hasChildren}
-															<button
-																class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-																on:click={() => toggleNode(subPath)}
-																aria-label={subCollapsed ? 'Expand' : 'Collapse'}
+								<span class="text-blue-600 dark:text-blue-400 font-medium">"{child.label}"</span>
+								<span class="text-gray-500 dark:text-gray-400">:</span>
+
+								{#if nodeInfo.hasChildren && !nodeInfo.isCollapsed}
+									<div class="ml-4">
+										{#each child.children as grandChild}
+											{@const grandNodeInfo = renderTreeNode(grandChild, nodeInfo.depth + 1)}
+											<div
+												class="flex items-start gap-2 py-1"
+												style="margin-left: {grandNodeInfo.indent}px;"
+											>
+												{#if grandNodeInfo.hasChildren}
+													<button
+														class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+														on:click={() => toggleNode(grandChild.key)}
+														aria-label={grandNodeInfo.isCollapsed ? 'Expand' : 'Collapse'}
+													>
+														{#if grandNodeInfo.isCollapsed}
+															<svg
+																class="w-3 h-3"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
 															>
-																{#if subCollapsed}
-																	<svg
-																		class="w-3 h-3"
-																		fill="none"
-																		stroke="currentColor"
-																		viewBox="0 0 24 24"
-																	>
-																		<path
-																			stroke-linecap="round"
-																			stroke-linejoin="round"
-																			stroke-width="2"
-																			d="M9 5l7 7-7 7"
-																		/>
-																	</svg>
-																{:else}
-																	<svg
-																		class="w-3 h-3"
-																		fill="none"
-																		stroke="currentColor"
-																		viewBox="0 0 24 24"
-																	>
-																		<path
-																			stroke-linecap="round"
-																			stroke-linejoin="round"
-																			stroke-width="2"
-																			d="M19 9l-7 7-7-7"
-																		/>
-																	</svg>
-																{/if}
-															</button>
+																<path
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	stroke-width="2"
+																	d="M9 5l7 7-7 7"
+																/>
+															</svg>
 														{:else}
-															<div class="w-4"></div>
+															<svg
+																class="w-3 h-3"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	stroke-width="2"
+																	d="M19 9l-7 7-7-7"
+																/>
+															</svg>
 														{/if}
-														<span class="text-blue-600 dark:text-blue-400 font-medium">"{key}"</span
-														>
-														<span class="text-gray-500 dark:text-gray-400">:</span>
-														{#if subType.hasChildren && !subCollapsed}
-															<div class="ml-4">
-																{#if Array.isArray(value)}
-																	{#each value as item, itemIndex}
-																		<div class="flex items-start gap-1 py-1">
-																			<span class="text-gray-500 dark:text-gray-400"
-																				>[{itemIndex}]</span
+													</button>
+												{:else}
+													<div class="w-4"></div>
+												{/if}
+
+												<span class="text-blue-600 dark:text-blue-400 font-medium"
+													>"{grandChild.label}"</span
+												>
+												<span class="text-gray-500 dark:text-gray-400">:</span>
+
+												{#if grandNodeInfo.hasChildren && !grandNodeInfo.isCollapsed}
+													<div class="ml-4">
+														{#each grandChild.children as greatGrandChild}
+															{@const greatGrandNodeInfo = renderTreeNode(
+																greatGrandChild,
+																grandNodeInfo.depth + 1
+															)}
+															<div
+																class="flex items-start gap-2 py-1"
+																style="margin-left: {greatGrandNodeInfo.indent}px;"
+															>
+																{#if greatGrandNodeInfo.hasChildren}
+																	<button
+																		class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+																		on:click={() => toggleNode(greatGrandChild.key)}
+																		aria-label={greatGrandNodeInfo.isCollapsed
+																			? 'Expand'
+																			: 'Collapse'}
+																	>
+																		{#if greatGrandNodeInfo.isCollapsed}
+																			<svg
+																				class="w-3 h-3"
+																				fill="none"
+																				stroke="currentColor"
+																				viewBox="0 0 24 24"
 																			>
-																			<span class="text-gray-500 dark:text-gray-400">:</span>
-																			<span class="text-gray-600 dark:text-gray-300"
-																				>{formatValue(item)}</span
+																				<path
+																					stroke-linecap="round"
+																					stroke-linejoin="round"
+																					stroke-width="2"
+																					d="M9 5l7 7-7 7"
+																				/>
+																			</svg>
+																		{:else}
+																			<svg
+																				class="w-3 h-3"
+																				fill="none"
+																				stroke="currentColor"
+																				viewBox="0 0 24 24"
 																			>
-																		</div>
-																	{/each}
+																				<path
+																					stroke-linecap="round"
+																					stroke-linejoin="round"
+																					stroke-width="2"
+																					d="M19 9l-7 7-7-7"
+																				/>
+																			</svg>
+																		{/if}
+																	</button>
 																{:else}
-																	{#each Object.entries(value) as [subKey, subValue]}
-																		<div class="flex items-start gap-1 py-1">
-																			<span class="text-blue-600 dark:text-blue-400 font-medium"
-																				>"{subKey}"</span
-																			>
-																			<span class="text-gray-500 dark:text-gray-400">:</span>
-																			<span class="text-gray-600 dark:text-gray-300"
-																				>{formatValue(subValue)}</span
-																			>
-																		</div>
-																	{/each}
+																	<div class="w-4"></div>
+																{/if}
+
+																<span class="text-blue-600 dark:text-blue-400 font-medium"
+																	>"{greatGrandChild.label}"</span
+																>
+																<span class="text-gray-500 dark:text-gray-400">:</span>
+
+																{#if greatGrandNodeInfo.hasChildren && !greatGrandNodeInfo.isCollapsed}
+																	<div class="ml-4 text-xs text-gray-400 dark:text-gray-500">
+																		{getNodeIcon(greatGrandChild.type)}
+																		{formatValue(greatGrandChild.value)}
+																		<span class="text-xs">(click to expand)</span>
+																	</div>
+																{:else}
+																	<span class="text-gray-600 dark:text-gray-300">
+																		{getNodeIcon(greatGrandChild.type)}
+																		{formatValue(greatGrandChild.value)}
+																	</span>
 																{/if}
 															</div>
-														{:else if subType.hasChildren && subCollapsed}
-															<span class="text-gray-500 dark:text-gray-400 italic">
-																{formatValue(value)} <span class="text-xs">(click to expand)</span>
-															</span>
-														{:else}
-															<span class="text-gray-600 dark:text-gray-300"
-																>{formatValue(value)}</span
-															>
-														{/if}
+														{/each}
 													</div>
+												{:else if grandNodeInfo.hasChildren && grandNodeInfo.isCollapsed}
+													<span class="text-gray-500 dark:text-gray-400 italic">
+														{getNodeIcon(grandChild.type)}
+														{formatValue(grandChild.value)}
+														<span class="text-xs">(click to expand)</span>
+													</span>
+												{:else}
+													<span class="text-gray-600 dark:text-gray-300">
+														{getNodeIcon(grandChild.type)}
+														{formatValue(grandChild.value)}
+													</span>
 												{/if}
-											{/each}
-										</div>
-									{:else}
-										<div class="text-sm text-gray-500 dark:text-gray-400 italic">
-											{formatValue(entry)} <span class="text-xs">(click to expand)</span>
-										</div>
-									{/if}
-								</div>
+											</div>
+										{/each}
+									</div>
+								{:else if nodeInfo.hasChildren && nodeInfo.isCollapsed}
+									<span class="text-gray-500 dark:text-gray-400 italic">
+										{getNodeIcon(child.type)}
+										{formatValue(child.value)} <span class="text-xs">(click to expand)</span>
+									</span>
+								{:else}
+									<span class="text-gray-600 dark:text-gray-300">
+										{getNodeIcon(child.type)}
+										{formatValue(child.value)}
+									</span>
+								{/if}
 							</div>
-						</div>
-					{/each}
-				{:else}
-					<!-- Handle single object -->
-					{#each Object.entries(logContent) as [key, value], i}
-						{@const nodeType = getNodeType(value)}
-						{@const path = key}
-						{@const isCollapsed = getCollapsedState(path)}
-						<div class="flex items-start gap-1 py-1">
-							<!-- Toggle button for objects/arrays -->
-							{#if nodeType.hasChildren}
-								<button
-									class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-									on:click={() => toggleNode(path)}
-									aria-label={isCollapsed ? 'Expand' : 'Collapse'}
-								>
-									{#if isCollapsed}
-										<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M9 5l7 7-7 7"
-											/>
-										</svg>
-									{:else}
-										<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M19 9l-7 7-7-7"
-											/>
-										</svg>
-									{/if}
-								</button>
-							{:else}
-								<div class="w-4"></div>
-							{/if}
-
-							<!-- Key -->
-							<span class="text-blue-600 dark:text-blue-400 font-medium">"{key}"</span>
-							<span class="text-gray-500 dark:text-gray-400">:</span>
-
-							<!-- Value -->
-							{#if nodeType.hasChildren && !isCollapsed}
-								<!-- Show children -->
-								<div class="ml-4">
-									{#if Array.isArray(value)}
-										{#each value as item, index}
-											{@const itemType = getNodeType(item)}
-											{@const itemPath = `${path}[${index}]`}
-											{@const itemCollapsed = getCollapsedState(itemPath)}
-											<div class="flex items-start gap-1 py-1">
-												{#if itemType.hasChildren}
-													<button
-														class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-														on:click={() => toggleNode(itemPath)}
-														aria-label={itemCollapsed ? 'Expand' : 'Collapse'}
-													>
-														{#if itemCollapsed}
-															<svg
-																class="w-3 h-3"
-																fill="none"
-																stroke="currentColor"
-																viewBox="0 0 24 24"
-															>
-																<path
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	stroke-width="2"
-																	d="M9 5l7 7-7 7"
-																/>
-															</svg>
-														{:else}
-															<svg
-																class="w-3 h-3"
-																fill="none"
-																stroke="currentColor"
-																viewBox="0 0 24 24"
-															>
-																<path
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	stroke-width="2"
-																	d="M19 9l-7 7-7-7"
-																/>
-															</svg>
-														{/if}
-													</button>
-												{:else}
-													<div class="w-4"></div>
-												{/if}
-												<span class="text-gray-500 dark:text-gray-400">[{index}]</span>
-												<span class="text-gray-500 dark:text-gray-400">:</span>
-												<span class="text-gray-600 dark:text-gray-300">{formatValue(item)}</span>
-												{#if !itemCollapsed && itemType.hasChildren}
-													{@const itemKeys = Array.isArray(item)
-														? item.length
-														: Object.keys(item).length}
-													<div class="ml-4 text-xs text-gray-400 dark:text-gray-500">
-														{itemKeys}
-														{Array.isArray(item) ? 'items' : 'properties'}
-													</div>
-												{/if}
-											</div>
-										{/each}
-									{:else}
-										{#each Object.entries(value) as [subKey, subValue]}
-											{@const subType = getNodeType(subValue)}
-											{@const subPath = `${path}.${subKey}`}
-											{@const subCollapsed = getCollapsedState(subPath)}
-											<div class="flex items-start gap-1 py-1">
-												{#if subType.hasChildren}
-													<button
-														class="flex-shrink-0 w-4 h-4 flex items-center justify-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
-														on:click={() => toggleNode(subPath)}
-														aria-label={subCollapsed ? 'Expand' : 'Collapse'}
-													>
-														{#if subCollapsed}
-															<svg
-																class="w-3 h-3"
-																fill="none"
-																stroke="currentColor"
-																viewBox="0 0 24 24"
-															>
-																<path
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	stroke-width="2"
-																	d="M9 5l7 7-7 7"
-																/>
-															</svg>
-														{:else}
-															<svg
-																class="w-3 h-3"
-																fill="none"
-																stroke="currentColor"
-																viewBox="0 0 24 24"
-															>
-																<path
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	stroke-width="2"
-																	d="M19 9l-7 7-7-7"
-																/>
-															</svg>
-														{/if}
-													</button>
-												{:else}
-													<div class="w-4"></div>
-												{/if}
-												<span class="text-blue-600 dark:text-blue-400 font-medium">"{subKey}"</span>
-												<span class="text-gray-500 dark:text-gray-400">:</span>
-												<span class="text-gray-600 dark:text-gray-300">{formatValue(subValue)}</span
-												>
-											</div>
-										{/each}
-									{/if}
-								</div>
-							{:else if nodeType.hasChildren && isCollapsed}
-								<!-- Show collapsed summary -->
-								<span class="text-gray-500 dark:text-gray-400 italic">
-									{formatValue(value)} <span class="text-xs">(click to expand)</span>
-								</span>
-							{:else}
-								<!-- Show simple value -->
-								<span class="text-gray-600 dark:text-gray-300">{formatValue(value)}</span>
-							{/if}
-						</div>
-					{/each}
+						{/each}
+					</div>
 				{/if}
 			</div>
 		</div>
