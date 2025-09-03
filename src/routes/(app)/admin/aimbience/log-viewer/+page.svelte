@@ -1332,7 +1332,7 @@
 				</div>
 			</div>
 		{:else if logContent}
-			<div class="max-w-7xl mx-auto space-y-6">
+			<div class="w-full space-y-6">
 				<!-- Combined File Information and Tabs -->
 				<div
 					class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
@@ -1532,15 +1532,11 @@
 													Duration
 												</th>
 												<th
-													class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700 w-20"
+													class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-20"
 												>
 													Tokens
 												</th>
-												<th
-													class="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-24"
-												>
-													Actions
-												</th>
+
 											</tr>
 										</thead>
 										<tbody
@@ -1558,7 +1554,10 @@
 												{@const tokenUsage = entry.token_usage || {}}
 												{@const tokens = entry.tokens || tokenUsage.total_tokens || 0}
 
-												<tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+												<tr
+													class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer"
+													on:click={() => (selectedEntry = selectedEntry === index ? null : index)}
+												>
 													<td
 														class="px-3 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700 w-16"
 													>
@@ -1597,57 +1596,16 @@
 														{duration ? `${duration}ms` : '-'}
 													</td>
 													<td
-														class="px-3 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700 w-20"
+														class="px-3 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 w-20"
 													>
 														{tokens > 0 ? formatTokenUsage(tokens) : '-'}
 													</td>
-													<td
-														class="px-3 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 w-24"
-													>
-														<button
-															on:click={() =>
-																(selectedEntry = selectedEntry === index ? null : index)}
-															class="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
-															title={selectedEntry === index ? 'Hide details' : 'Show details'}
-														>
-															{#if selectedEntry === index}
-																<svg
-																	class="w-4 h-4"
-																	fill="none"
-																	stroke="currentColor"
-																	viewBox="0 0 24 24"
-																>
-																	<path
-																		stroke-linecap="round"
-																		stroke-linejoin="round"
-																		stroke-width="2"
-																		d="M5 15l7-7 7 7"
-																	/>
-																</svg>
-																<span class="hidden sm:inline">Hide</span>
-															{:else}
-																<svg
-																	class="w-4 h-4"
-																	fill="none"
-																	stroke="currentColor"
-																	viewBox="0 0 24 24"
-																>
-																	<path
-																		stroke-linecap="round"
-																		stroke-linejoin="round"
-																		stroke-width="2"
-																		d="M19 9l-7 7-7-7"
-																	/>
-																</svg>
-																<span class="hidden sm:inline">Details</span>
-															{/if}
-														</button>
-													</td>
+
 												</tr>
 												{#if selectedEntry === index}
 													<tr>
 														<td
-															colspan="7"
+															colspan="6"
 															class="px-6 py-6 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700"
 														>
 															<div class="space-y-4">
@@ -1678,113 +1636,278 @@
 																</div>
 
 																<!-- Rich Content Display -->
-																{#if entry.data || entry.metadata || entry.errors || entry.response || entry.request || entry.context || entry.workflow_data}
+																{#if entry.data || entry.metadata || entry.errors || entry.response || entry.request || entry.context || entry.workflow_data || Object.keys(entry).length > 3}
 																	<!-- Structured Data Sections -->
 																	<div class="space-y-4">
 																		{#if entry.data}
-																			<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-																				<h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-																					<svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+																			<div
+																				class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+																			>
+																				<h5
+																					class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2"
+																				>
+																					<svg
+																						class="w-4 h-4 text-blue-600 dark:text-blue-400"
+																						fill="none"
+																						stroke="currentColor"
+																						viewBox="0 0 24 24"
+																					>
+																						<path
+																							stroke-linecap="round"
+																							stroke-linejoin="round"
+																							stroke-width="2"
+																							d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+																						/>
 																					</svg>
 																					Data
 																				</h5>
 																				<div class="bg-gray-50 dark:bg-gray-800 rounded p-3">
 																					{#if typeof entry.data === 'string'}
-																						<p class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">{entry.data}</p>
+																						<p
+																							class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap"
+																						>
+																							{entry.data}
+																						</p>
 																					{:else}
-																						<pre class="text-xs text-gray-900 dark:text-white font-mono overflow-auto max-h-48">{JSON.stringify(entry.data, null, 2)}</pre>
+																						<pre
+																							class="text-xs text-gray-900 dark:text-white font-mono overflow-auto max-h-48">{JSON.stringify(
+																								entry.data,
+																								null,
+																								2
+																							)}</pre>
 																					{/if}
 																				</div>
 																			</div>
 																		{/if}
 
 																		{#if entry.response}
-																			<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-																				<h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-																					<svg class="w-4 h-4 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+																			<div
+																				class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+																			>
+																				<h5
+																					class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2"
+																				>
+																					<svg
+																						class="w-4 h-4 text-green-600 dark:text-green-400"
+																						fill="none"
+																						stroke="currentColor"
+																						viewBox="0 0 24 24"
+																					>
+																						<path
+																							stroke-linecap="round"
+																							stroke-linejoin="round"
+																							stroke-width="2"
+																							d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+																						/>
 																					</svg>
 																					Response
 																				</h5>
 																				<div class="bg-gray-50 dark:bg-gray-800 rounded p-3">
 																					{#if typeof entry.response === 'string'}
-																						<p class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">{entry.response}</p>
+																						<p
+																							class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap"
+																						>
+																							{entry.response}
+																						</p>
 																					{:else}
-																						<pre class="text-xs text-gray-900 dark:text-white font-mono overflow-auto max-h-48">{JSON.stringify(entry.response, null, 2)}</pre>
+																						<pre
+																							class="text-xs text-gray-900 dark:text-white font-mono overflow-auto max-h-48">{JSON.stringify(
+																								entry.response,
+																								null,
+																								2
+																							)}</pre>
 																					{/if}
 																				</div>
 																			</div>
 																		{/if}
 
 																		{#if entry.request}
-																			<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-																				<h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-																					<svg class="w-4 h-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+																			<div
+																				class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+																			>
+																				<h5
+																					class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2"
+																				>
+																					<svg
+																						class="w-4 h-4 text-purple-600 dark:text-purple-400"
+																						fill="none"
+																						stroke="currentColor"
+																						viewBox="0 0 24 24"
+																					>
+																						<path
+																							stroke-linecap="round"
+																							stroke-linejoin="round"
+																							stroke-width="2"
+																							d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+																						/>
 																					</svg>
 																					Request
 																				</h5>
 																				<div class="bg-gray-50 dark:bg-gray-800 rounded p-3">
 																					{#if typeof entry.request === 'string'}
-																						<p class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">{entry.request}</p>
+																						<p
+																							class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap"
+																						>
+																							{entry.request}
+																						</p>
 																					{:else}
-																						<pre class="text-xs text-gray-900 dark:text-white font-mono overflow-auto max-h-48">{JSON.stringify(entry.request, null, 2)}</pre>
+																						<pre
+																							class="text-xs text-gray-900 dark:text-white font-mono overflow-auto max-h-48">{JSON.stringify(
+																								entry.request,
+																								null,
+																								2
+																							)}</pre>
 																					{/if}
 																				</div>
 																			</div>
 																		{/if}
 
 																		{#if entry.context}
-																			<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-																				<h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-																					<svg class="w-4 h-4 text-orange-600 dark:text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+																			<div
+																				class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+																			>
+																				<h5
+																					class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2"
+																				>
+																					<svg
+																						class="w-4 h-4 text-orange-600 dark:text-orange-400"
+																						fill="none"
+																						stroke="currentColor"
+																						viewBox="0 0 24 24"
+																					>
+																						<path
+																							stroke-linecap="round"
+																							stroke-linejoin="round"
+																							stroke-width="2"
+																							d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+																						/>
 																					</svg>
 																					Context
 																				</h5>
 																				<div class="bg-gray-50 dark:bg-gray-800 rounded p-3">
 																					{#if typeof entry.context === 'string'}
-																						<p class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">{entry.context}</p>
+																						<p
+																							class="text-sm text-gray-900 dark:text-white whitespace-pre-wrap"
+																						>
+																							{entry.context}
+																						</p>
 																					{:else}
-																						<pre class="text-xs text-gray-900 dark:text-white font-mono overflow-auto max-h-48">{JSON.stringify(entry.context, null, 2)}</pre>
+																						<pre
+																							class="text-xs text-gray-900 dark:text-white font-mono overflow-auto max-h-48">{JSON.stringify(
+																								entry.context,
+																								null,
+																								2
+																							)}</pre>
 																					{/if}
 																				</div>
 																			</div>
 																		{/if}
 
 																		{#if entry.errors}
-																			<div class="border border-red-200 dark:border-red-800 rounded-lg p-4">
-																				<h5 class="text-sm font-semibold text-red-900 dark:text-red-100 mb-3 flex items-center gap-2">
-																					<svg class="w-4 h-4 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+																			<div
+																				class="border border-red-200 dark:border-red-800 rounded-lg p-4"
+																			>
+																				<h5
+																					class="text-sm font-semibold text-red-900 dark:text-red-100 mb-3 flex items-center gap-2"
+																				>
+																					<svg
+																						class="w-4 h-4 text-red-600 dark:text-red-400"
+																						fill="none"
+																						stroke="currentColor"
+																						viewBox="0 0 24 24"
+																					>
+																						<path
+																							stroke-linecap="round"
+																							stroke-linejoin="round"
+																							stroke-width="2"
+																							d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+																						/>
 																					</svg>
 																					Errors
 																				</h5>
 																				<div class="bg-red-50 dark:bg-red-900/20 rounded p-3">
 																					{#if Array.isArray(entry.errors)}
 																						{#each entry.errors as error}
-																							<div class="text-sm text-red-900 dark:text-red-100 mb-2 p-2 bg-red-100 dark:bg-red-900/30 rounded">
-																								{typeof error === 'string' ? error : JSON.stringify(error, null, 2)}
+																							<div
+																								class="text-sm text-red-900 dark:text-red-100 mb-2 p-2 bg-red-100 dark:bg-red-900/30 rounded"
+																							>
+																								{typeof error === 'string'
+																									? error
+																									: JSON.stringify(error, null, 2)}
 																							</div>
 																						{/each}
 																					{:else}
-																						<p class="text-sm text-red-900 dark:text-red-100">{entry.errors}</p>
+																						<p class="text-sm text-red-900 dark:text-red-100">
+																							{entry.errors}
+																						</p>
 																					{/if}
 																				</div>
 																			</div>
 																		{/if}
 
 																		{#if entry.workflow_data}
-																			<div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-																				<h5 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
-																					<svg class="w-4 h-4 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+																			<div
+																				class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+																			>
+																				<h5
+																					class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2"
+																				>
+																					<svg
+																						class="w-4 h-4 text-indigo-600 dark:text-indigo-400"
+																						fill="none"
+																						stroke="currentColor"
+																						viewBox="0 0 24 24"
+																					>
+																						<path
+																							stroke-linecap="round"
+																							stroke-linejoin="round"
+																							stroke-width="2"
+																							d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"
+																						/>
 																					</svg>
 																					Workflow Data
 																				</h5>
 																				<div class="bg-gray-50 dark:bg-gray-800 rounded p-3">
-																					<pre class="text-xs text-gray-900 dark:text-white font-mono overflow-auto max-h-48">{JSON.stringify(entry.workflow_data, null, 2)}</pre>
+																					<pre
+																						class="text-xs text-gray-900 dark:text-white font-mono overflow-auto max-h-48">{JSON.stringify(
+																							entry.workflow_data,
+																							null,
+																							2
+																						)}</pre>
+																				</div>
+																			</div>
+																		{/if}
+
+																		<!-- Show all other fields if no rich content found -->
+																		{#if !entry.data && !entry.metadata && !entry.errors && !entry.response && !entry.request && !entry.context && !entry.workflow_data && Object.keys(entry).length > 3}
+																			<div
+																				class="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+																			>
+																				<h5
+																					class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2"
+																				>
+																					<svg
+																						class="w-4 h-4 text-gray-600 dark:text-gray-400"
+																						fill="none"
+																						stroke="currentColor"
+																						viewBox="0 0 24 24"
+																					>
+																						<path
+																							stroke-linecap="round"
+																							stroke-linejoin="round"
+																							stroke-width="2"
+																							d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+																						/>
+																					</svg>
+																					All Fields
+																				</h5>
+																				<div class="bg-gray-50 dark:bg-gray-800 rounded p-3">
+																					<pre
+																						class="text-xs text-gray-900 dark:text-white font-mono overflow-auto max-h-48">{JSON.stringify(
+																							entry,
+																							null,
+																							2
+																						)}</pre>
 																				</div>
 																			</div>
 																		{/if}
@@ -1794,14 +1917,31 @@
 																	<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
 																		<div class="space-y-2">
 																			<div class="flex items-start gap-2">
-																				<span class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">Level:</span>
-																				<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {level === 'ERROR' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300' : level === 'WARNING' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300' : level === 'SUCCESS' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300'}">
+																				<span
+																					class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]"
+																					>Level:</span
+																				>
+																				<span
+																					class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {level ===
+																					'ERROR'
+																						? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
+																						: level === 'WARNING'
+																							? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300'
+																							: level === 'SUCCESS'
+																								? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+																								: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300'}"
+																				>
 																					{level}
 																				</span>
 																			</div>
 																			<div class="flex items-start gap-2">
-																				<span class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">Time:</span>
-																				<span class="text-gray-600 dark:text-gray-400 font-mono text-xs">
+																				<span
+																					class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]"
+																					>Time:</span
+																				>
+																				<span
+																					class="text-gray-600 dark:text-gray-400 font-mono text-xs"
+																				>
 																					{timestamp ? formatTimelineTimestamp(timestamp) : 'N/A'}
 																				</span>
 																			</div>
@@ -1809,25 +1949,44 @@
 																		<div class="space-y-2">
 																			{#if duration}
 																				<div class="flex items-start gap-2">
-																					<span class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">Duration:</span>
-																					<span class="text-gray-600 dark:text-gray-400">{duration}ms</span>
+																					<span
+																						class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]"
+																						>Duration:</span
+																					>
+																					<span class="text-gray-600 dark:text-gray-400"
+																						>{duration}ms</span
+																					>
 																				</div>
 																			{/if}
 																			{#if tokens > 0}
 																				<div class="flex items-start gap-2">
-																					<span class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">Tokens:</span>
-																					<span class="text-gray-600 dark:text-gray-400">{formatTokenUsage(tokens)}</span>
+																					<span
+																						class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]"
+																						>Tokens:</span
+																					>
+																					<span class="text-gray-600 dark:text-gray-400"
+																						>{formatTokenUsage(tokens)}</span
+																					>
 																				</div>
 																			{/if}
 																		</div>
 																	</div>
-																	
+
 																	<!-- Full Message -->
 																	<div class="border-t border-gray-200 dark:border-gray-700 pt-4">
 																		<div class="space-y-2">
-																			<span class="text-sm font-medium text-gray-700 dark:text-gray-300">Message:</span>
-																			<div class="p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
-																				<p class="text-sm text-gray-900 dark:text-white leading-relaxed">{message}</p>
+																			<span
+																				class="text-sm font-medium text-gray-700 dark:text-gray-300"
+																				>Message:</span
+																			>
+																			<div
+																				class="p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700"
+																			>
+																				<p
+																					class="text-sm text-gray-900 dark:text-white leading-relaxed"
+																				>
+																					{message}
+																				</p>
 																			</div>
 																		</div>
 																	</div>
