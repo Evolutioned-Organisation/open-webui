@@ -7,7 +7,8 @@
 		if (!entry) return false;
 
 		// Check for explicit query type
-		if (entry.query_type === 'entity_discovery' || entry.query_type === 'claim_discovery') return true;
+		if (entry.query_type === 'entity_discovery' || entry.query_type === 'claim_discovery')
+			return true;
 
 		// Check message content for Cypher keywords
 		const message = entry.message || entry.msg || entry.text || '';
@@ -32,9 +33,11 @@
 		// Try to find query in various fields
 		const possibleFields = [
 			entry.query,
+			entry.query_text,
 			entry.cypher_query,
 			entry.cypher,
 			entry.data?.query,
+			entry.data?.query_text,
 			entry.data?.cypher_query,
 			entry.data?.cypher,
 			entry.message,
