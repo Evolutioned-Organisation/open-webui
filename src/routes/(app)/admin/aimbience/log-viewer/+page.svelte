@@ -1353,90 +1353,117 @@
 			</div>
 		{:else if logContent}
 			<div class="max-w-7xl mx-auto space-y-6">
-				<!-- File Information Box -->
-				<div
-					class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4"
-				>
-					<div class="flex items-center justify-between">
-						<div class="flex items-center gap-4">
-							<div
-								class="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center"
-							>
-								<svg
-									class="w-5 h-5 text-blue-600 dark:text-blue-400"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-									/>
-								</svg>
-							</div>
-							<div>
-								<h2 class="text-lg font-medium text-gray-900 dark:text-white">{filename}</h2>
-								<div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
-									<span>{formatFileSize(logContent.size)}</span>
-									<span>•</span>
-									<span>{formatDate(logContent.modified)}</span>
-									{#if Array.isArray(logContent.content)}
-										{@const metadata = extractWorkflowMetadata(logContent.content)}
-										{#if metadata.chatId}
-											<span>•</span>
-											<span class="font-mono text-xs">{metadata.chatId}</span>
-										{/if}
-									{/if}
-								</div>
-							</div>
-						</div>
-						<div class="flex items-center gap-2">
-							<button
-								on:click={() => fetchLogContent(true)}
-								class="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-								disabled={loading || isRetrying}
-							>
-								{loading || isRetrying ? 'Refreshing...' : 'Refresh'}
-							</button>
-						</div>
-					</div>
-				</div>
-
-				<!-- Tabs -->
+				<!-- Combined File Information and Tabs -->
 				<div
 					class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
 				>
+					<!-- File Information Header -->
+					<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+						<div class="flex items-center justify-between">
+							<div class="flex items-center gap-4">
+								<div
+									class="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center"
+								>
+									<svg
+										class="w-5 h-5 text-blue-600 dark:text-blue-400"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+										/>
+									</svg>
+								</div>
+								<div>
+									<h2 class="text-lg font-medium text-gray-900 dark:text-white">{filename}</h2>
+									<div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
+										<span>{formatFileSize(logContent.size)}</span>
+										<span>•</span>
+										<span>{formatDate(logContent.modified)}</span>
+										{#if Array.isArray(logContent.content)}
+											{@const metadata = extractWorkflowMetadata(logContent.content)}
+											{#if metadata.chatId}
+												<span>•</span>
+												<span class="font-mono text-xs">{metadata.chatId}</span>
+											{/if}
+										{/if}
+									</div>
+								</div>
+							</div>
+							<div class="flex items-center gap-2">
+								<button
+									on:click={() => fetchLogContent(true)}
+									class="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+									disabled={loading || isRetrying}
+								>
+									{loading || isRetrying ? 'Refreshing...' : 'Refresh'}
+								</button>
+							</div>
+						</div>
+					</div>
+
+					<!-- Tabs Navigation -->
 					<div class="border-b border-gray-200 dark:border-gray-700">
-						<nav class="flex space-x-8 px-6">
-							<button
-								on:click={() => (viewMode = 'timeline')}
-								class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {viewMode ===
-								'timeline'
-									? 'border-blue-500 text-blue-600 dark:text-blue-400'
-									: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'}"
-							>
-								Timeline
-							</button>
-							<button
-								on:click={() => (viewMode = 'tree')}
-								class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {viewMode ===
-								'tree'
-									? 'border-blue-500 text-blue-600 dark:text-blue-400'
-									: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'}"
-							>
-								Tree View
-							</button>
-							<button
-								on:click={() => (viewMode = 'raw')}
-								class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {viewMode ===
-								'raw'
-									? 'border-blue-500 text-blue-600 dark:text-blue-400'
-									: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'}"
-							>
-								Raw JSON
-							</button>
+						<nav class="flex items-center justify-between px-6">
+							<div class="flex space-x-8">
+								<button
+									on:click={() => (viewMode = 'timeline')}
+									class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {viewMode ===
+									'timeline'
+										? 'border-blue-500 text-blue-600 dark:text-blue-400'
+										: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'}"
+								>
+									Timeline
+								</button>
+								<button
+									on:click={() => (viewMode = 'tree')}
+									class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {viewMode ===
+									'tree'
+										? 'border-blue-500 text-blue-600 dark:text-blue-400'
+										: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'}"
+								>
+									Tree View
+								</button>
+								<button
+									on:click={() => (viewMode = 'raw')}
+									class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {viewMode ===
+									'raw'
+										? 'border-blue-500 text-blue-600 dark:text-blue-400'
+										: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'}"
+								>
+									Raw JSON
+								</button>
+							</div>
+							<div class="flex items-center gap-2">
+								<button
+									on:click={() => {
+										// Export raw JSON data
+										const rawData = logContent.content;
+										const blob = new Blob([JSON.stringify(rawData, null, 2)], {
+											type: 'application/json'
+										});
+										const url = URL.createObjectURL(blob);
+										const a = document.createElement('a');
+										a.href = url;
+										a.download = `${filename?.replace(/[^a-zA-Z0-9]/g, '-')}.json`;
+										document.body.appendChild(a);
+										a.click();
+										document.body.removeChild(a);
+										URL.revokeObjectURL(url);
+										toast.success('JSON data downloaded');
+									}}
+									class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
+								>
+									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+									</svg>
+									Download JSON
+								</button>
+							</div>
 						</nav>
 					</div>
 					<!-- Tab Content -->
@@ -1444,38 +1471,31 @@
 						{#if logContent.content}
 							{#if isValidJSON(logContent.content) && viewMode === 'timeline'}
 								<!-- Compact Timeline Table -->
-								<div class="overflow-hidden">
+								<div class="overflow-hidden border border-gray-200 dark:border-gray-700 rounded-lg">
 									<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
 										<thead class="bg-gray-50 dark:bg-gray-800">
 											<tr>
-												<th
-													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-													>Step</th
-												>
-												<th
-													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-													>Time</th
-												>
-												<th
-													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-													>Level</th
-												>
-												<th
-													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-													>Message</th
-												>
-												<th
-													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-													>Duration</th
-												>
-												<th
-													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-													>Tokens</th
-												>
-												<th
-													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-													>Actions</th
-												>
+												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+													Step
+												</th>
+												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+													Time
+												</th>
+												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+													Level
+												</th>
+												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+													Message
+												</th>
+												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+													Duration
+												</th>
+												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+													Tokens
+												</th>
+												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+													Actions
+												</th>
 											</tr>
 										</thead>
 										<tbody
@@ -1494,17 +1514,13 @@
 												{@const tokens = entry.tokens || tokenUsage.total_tokens || 0}
 
 												<tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-													<td
-														class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white"
-													>
+													<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700">
 														{index + 1}
 													</td>
-													<td
-														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
-													>
+													<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">
 														{timestamp ? formatTimelineTimestamp(timestamp) : '-'}
 													</td>
-													<td class="px-6 py-4 whitespace-nowrap">
+													<td class="px-6 py-4 whitespace-nowrap border-r border-gray-200 dark:border-gray-700">
 														<span
 															class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {level ===
 															'ERROR'
@@ -1518,25 +1534,16 @@
 															{level}
 														</span>
 													</td>
-													<td
-														class="px-6 py-4 text-sm text-gray-900 dark:text-white max-w-md truncate"
-														title={message}
-													>
+													<td class="px-6 py-4 text-sm text-gray-900 dark:text-white max-w-md truncate border-r border-gray-200 dark:border-gray-700" title={message}>
 														{message}
 													</td>
-													<td
-														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
-													>
+													<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">
 														{duration ? `${duration}ms` : '-'}
 													</td>
-													<td
-														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
-													>
+													<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">
 														{tokens > 0 ? formatTokenUsage(tokens) : '-'}
 													</td>
-													<td
-														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
-													>
+													<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
 														<button
 															on:click={() =>
 																(selectedEntry = selectedEntry === index ? null : index)}
