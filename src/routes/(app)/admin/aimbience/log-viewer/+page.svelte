@@ -10,13 +10,12 @@
 
 	// Utility imports
 	import {
-		validateFilename,
-		sanitizeUrlParameter,
 		createSafeErrorMessage,
 		isValidJSON,
 		generateWorkflowSummary,
 		type LogEntry
 	} from '$lib/utils/log-utils';
+	import { validateFilename, sanitizeUrlParameter } from '$lib/utils/validation';
 
 	// Component imports
 	import LogViewerHeader from '$lib/components/admin/Aimbience/Components/LogViewerHeader.svelte';
