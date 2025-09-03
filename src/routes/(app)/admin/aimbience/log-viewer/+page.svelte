@@ -1472,10 +1472,6 @@
 													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
 													>Tokens</th
 												>
-												<th
-													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-													>Actions</th
-												>
 											</tr>
 										</thead>
 										<tbody
@@ -1493,11 +1489,43 @@
 												{@const tokenUsage = entry.token_usage || {}}
 												{@const tokens = entry.tokens || tokenUsage.total_tokens || 0}
 
-												<tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+												<tr
+													class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer {selectedEntry ===
+													index
+														? 'bg-blue-50 dark:bg-blue-900/20'
+														: ''}"
+													on:click={() => (selectedEntry = selectedEntry === index ? null : index)}
+													role="button"
+													tabindex="0"
+													on:keydown={(e) => {
+														if (e.key === 'Enter' || e.key === ' ') {
+															e.preventDefault();
+															selectedEntry = selectedEntry === index ? null : index;
+														}
+													}}
+												>
 													<td
 														class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white"
 													>
-														{index + 1}
+														<div class="flex items-center gap-2">
+															<span>{index + 1}</span>
+															<svg
+																class="w-4 h-4 text-gray-400 transition-transform duration-200 {selectedEntry ===
+																index
+																	? 'rotate-90'
+																	: ''}"
+																fill="none"
+																stroke="currentColor"
+																viewBox="0 0 24 24"
+															>
+																<path
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	stroke-width="2"
+																	d="M9 5l7 7-7 7"
+																/>
+															</svg>
+														</div>
 													</td>
 													<td
 														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
@@ -1534,57 +1562,206 @@
 													>
 														{tokens > 0 ? formatTokenUsage(tokens) : '-'}
 													</td>
-													<td
-														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
-													>
-														<button
-															on:click={() =>
-																(selectedEntry = selectedEntry === index ? null : index)}
-															class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-														>
-															{selectedEntry === index ? 'Hide' : 'Details'}
-														</button>
-													</td>
 												</tr>
 												{#if selectedEntry === index}
 													<tr>
-														<td colspan="7" class="px-6 py-4 bg-gray-50 dark:bg-gray-800">
-															<div class="space-y-3">
-																<div class="grid grid-cols-2 gap-4 text-sm">
-																	<div>
-																		<span class="font-medium text-gray-700 dark:text-gray-300"
-																			>Event Type:</span
+														<td
+															colspan="6"
+															class="px-6 py-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/10 dark:to-indigo-900/10 border-l-4 border-blue-500"
+														>
+															<div class="space-y-4">
+																<!-- Header with expand/collapse indicator -->
+																<div class="flex items-center justify-between">
+																	<div class="flex items-center gap-2">
+																		<svg
+																			class="w-5 h-5 text-blue-600 dark:text-blue-400"
+																			fill="none"
+																			stroke="currentColor"
+																			viewBox="0 0 24 24"
 																		>
-																		<span class="ml-2 text-gray-600 dark:text-gray-400"
-																			>{eventType || 'N/A'}</span
-																		>
+																			<path
+																				stroke-linecap="round"
+																				stroke-linejoin="round"
+																				stroke-width="2"
+																				d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+																			/>
+																		</svg>
+																		<h4 class="text-sm font-semibold text-gray-900 dark:text-white">
+																			Log Entry Details
+																		</h4>
 																	</div>
-																	<div>
-																		<span class="font-medium text-gray-700 dark:text-gray-300"
-																			>Full Message:</span
+																	<button
+																		on:click|stopPropagation={() => (selectedEntry = null)}
+																		class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+																		aria-label="Close details"
+																	>
+																		<svg
+																			class="w-4 h-4"
+																			fill="none"
+																			stroke="currentColor"
+																			viewBox="0 0 24 24"
 																		>
-																		<span class="ml-2 text-gray-600 dark:text-gray-400"
-																			>{message}</span
+																			<path
+																				stroke-linecap="round"
+																				stroke-linejoin="round"
+																				stroke-width="2"
+																				d="M6 18L18 6M6 6l12 12"
+																			/>
+																		</svg>
+																	</button>
+																</div>
+
+																<!-- Enhanced content grid -->
+																<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+																	<div class="space-y-3">
+																		<div
+																			class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
 																		>
+																			<div
+																				class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1"
+																			>
+																				Event Type
+																			</div>
+																			<div class="text-sm text-gray-900 dark:text-white font-mono">
+																				{eventType || 'N/A'}
+																			</div>
+																		</div>
+
+																		<div
+																			class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+																		>
+																			<div
+																				class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1"
+																			>
+																				Duration
+																			</div>
+																			<div class="text-sm text-gray-900 dark:text-white">
+																				{duration ? `${duration}ms` : 'N/A'}
+																			</div>
+																		</div>
+
+																		{#if tokens > 0}
+																			<div
+																				class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+																			>
+																				<div
+																					class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1"
+																				>
+																					Token Usage
+																				</div>
+																				<div class="text-sm text-gray-900 dark:text-white">
+																					{formatTokenUsage(tokens)} tokens
+																				</div>
+																			</div>
+																		{/if}
+																	</div>
+
+																	<div class="space-y-3">
+																		<div
+																			class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+																		>
+																			<div
+																				class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1"
+																			>
+																				Full Message
+																			</div>
+																			<div
+																				class="text-sm text-gray-900 dark:text-white leading-relaxed"
+																			>
+																				{message}
+																			</div>
+																		</div>
+
+																		{#if entry.data || entry.metadata || entry.errors}
+																			<div
+																				class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+																			>
+																				<div
+																					class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2"
+																				>
+																					Additional Data
+																				</div>
+																				<div class="space-y-2">
+																					{#if entry.data}
+																						<div>
+																							<div
+																								class="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1"
+																							>
+																								Data:
+																							</div>
+																							<pre
+																								class="text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded border overflow-auto max-h-24 text-gray-700 dark:text-gray-300">{JSON.stringify(
+																									entry.data,
+																									null,
+																									2
+																								)}</pre>
+																						</div>
+																					{/if}
+																					{#if entry.metadata}
+																						<div>
+																							<div
+																								class="text-xs text-green-600 dark:text-green-400 font-medium mb-1"
+																							>
+																								Metadata:
+																							</div>
+																							<pre
+																								class="text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded border overflow-auto max-h-24 text-gray-700 dark:text-gray-300">{JSON.stringify(
+																									entry.metadata,
+																									null,
+																									2
+																								)}</pre>
+																						</div>
+																					{/if}
+																					{#if entry.errors}
+																						<div>
+																							<div
+																								class="text-xs text-red-600 dark:text-red-400 font-medium mb-1"
+																							>
+																								Errors:
+																							</div>
+																							<pre
+																								class="text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded border overflow-auto max-h-24 text-gray-700 dark:text-gray-300">{JSON.stringify(
+																									entry.errors,
+																									null,
+																									2
+																								)}</pre>
+																						</div>
+																					{/if}
+																				</div>
+																			</div>
+																		{/if}
 																	</div>
 																</div>
-																{#if entry.data || entry.metadata || entry.errors}
-																	<div class="border-t border-gray-200 dark:border-gray-700 pt-3">
-																		<details class="text-sm">
-																			<summary
-																				class="cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+
+																<!-- Raw data toggle -->
+																<div class="border-t border-gray-200 dark:border-gray-700 pt-3">
+																	<details class="text-sm">
+																		<summary
+																			class="cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium flex items-center gap-2"
+																		>
+																			<svg
+																				class="w-4 h-4"
+																				fill="none"
+																				stroke="currentColor"
+																				viewBox="0 0 24 24"
 																			>
-																				Show Raw Data
-																			</summary>
-																			<pre
-																				class="mt-2 p-3 bg-gray-100 dark:bg-gray-700 rounded text-xs overflow-auto max-h-48">{JSON.stringify(
-																					entry,
-																					null,
-																					2
-																				)}</pre>
-																		</details>
-																	</div>
-																{/if}
+																				<path
+																					stroke-linecap="round"
+																					stroke-linejoin="round"
+																					stroke-width="2"
+																					d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+																				/>
+																			</svg>
+																			Show Complete Raw Data
+																		</summary>
+																		<pre
+																			class="mt-3 p-4 bg-gray-100 dark:bg-gray-800 rounded-lg text-xs overflow-auto max-h-64 text-gray-700 dark:text-gray-300 border">{JSON.stringify(
+																				entry,
+																				null,
+																				2
+																			)}</pre>
+																	</details>
+																</div>
 															</div>
 														</td>
 													</tr>
