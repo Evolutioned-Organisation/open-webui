@@ -41,6 +41,7 @@
 	let retryCount = 0; // Number of retry attempts for failed requests
 	let isRetrying = false; // Specific retry state to differentiate from initial loading
 	let viewMode: 'timeline' | 'tree' | 'raw' = 'timeline'; // Toggle between timeline, tree view and raw JSON
+	let selectedEntry: number | null = null; // Currently selected log entry for detailed view
 
 	onMount(async () => {
 		// Get filename from URL parameters
@@ -207,6 +208,16 @@
 		const sizes = ['B', 'KB', 'MB', 'GB'];
 		const i = Math.floor(Math.log(bytes) / Math.log(1024));
 		return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
+	}
+
+	function formatTokenUsage(tokens: number): string {
+		if (!tokens || tokens === 0) return '0';
+		if (tokens >= 1000000) {
+			return (tokens / 1000000).toFixed(1) + 'M';
+		} else if (tokens >= 1000) {
+			return (tokens / 1000).toFixed(1) + 'K';
+		}
+		return tokens.toString();
 	}
 
 	function goBack() {
@@ -384,7 +395,7 @@
 		}
 	}
 
-	// New functions to extract essential workflow information
+	// Enhanced workflow analysis functions
 	function extractUserQuestion(content: any): string {
 		if (!content || !Array.isArray(content)) return 'Not found';
 
@@ -392,23 +403,155 @@
 			for (const item of content) {
 				const parsed = typeof item === 'string' ? JSON.parse(item) : item;
 				const message = parsed?.message || parsed?.msg || '';
-				const data = parsed?.data || parsed?.input || parsed?.query || parsed?.question;
+				const inputQuestion = parsed?.input_question || parsed?.question || '';
 
 				// Look for user question patterns
+				if (inputQuestion && inputQuestion.length > 10) {
+					return inputQuestion;
+				}
 				if (
 					message.includes('user question') ||
 					message.includes('query') ||
 					message.includes('input')
 				) {
-					return data || message;
-				}
-				if (data && typeof data === 'string' && data.length > 10) {
-					return data;
+					return parsed?.data || message;
 				}
 			}
 			return 'Not found';
 		} catch {
 			return 'Not found';
+		}
+	}
+
+	function extractWorkflowMetadata(content: any): any {
+		if (!content || !Array.isArray(content)) return {};
+
+		try {
+			const metadata = {
+				chatId: null,
+				workflowId: null,
+				threadId: null,
+				startTime: null,
+				endTime: null,
+				totalSteps: 0,
+				errorCount: 0,
+				warningCount: 0,
+				successCount: 0,
+				processingSteps: []
+			};
+
+			content.forEach((item) => {
+				const parsed = typeof item === 'string' ? JSON.parse(item) : item;
+
+				// Extract basic metadata
+				if (parsed?.chat_id && !metadata.chatId) metadata.chatId = parsed.chat_id;
+				if (parsed?.workflow_id && !metadata.workflowId) metadata.workflowId = parsed.workflow_id;
+				if (parsed?.thread_id && !metadata.threadId) metadata.threadId = parsed.thread_id;
+
+				// Extract timestamps
+				if (parsed?.timestamp && !metadata.startTime) metadata.startTime = parsed.timestamp;
+				if (parsed?.timestamp) metadata.endTime = parsed.timestamp;
+
+				// Count log levels
+				if (parsed?.level === 'ERROR') metadata.errorCount++;
+				if (parsed?.level === 'WARNING') metadata.warningCount++;
+				if (parsed?.level === 'INFO' || parsed?.level === 'SUCCESS') metadata.successCount++;
+
+				// Extract processing steps
+				if (parsed?.event_type) {
+					metadata.processingSteps.push({
+						type: parsed.event_type,
+						message: parsed.message,
+						timestamp: parsed.timestamp,
+						duration: parsed.duration_ms
+					});
+				}
+			});
+
+			metadata.totalSteps = content.length;
+			return metadata;
+		} catch {
+			return {};
+		}
+	}
+
+	function extractPerformanceMetrics(content: any): any {
+		if (!content || !Array.isArray(content)) return {};
+
+		try {
+			const metrics = {
+				totalDuration: 0,
+				processingRate: 0,
+				memoryUsage: 0,
+				entitiesFound: 0,
+				claimsFound: 0,
+				chunksProcessed: 0,
+				responseLength: 0,
+				totalTokens: 0,
+				inputTokens: 0,
+				outputTokens: 0,
+				tokenUsage: {
+					prompt: 0,
+					completion: 0,
+					total: 0
+				}
+			};
+
+			content.forEach((item) => {
+				const parsed = typeof item === 'string' ? JSON.parse(item) : item;
+
+				// Extract duration metrics
+				if (parsed?.duration_ms) {
+					metrics.totalDuration += parsed.duration_ms;
+				}
+
+				// Extract entity counts
+				if (parsed?.entities_found) metrics.entitiesFound += parsed.entities_found;
+				if (parsed?.claims_found) metrics.claimsFound += parsed.claims_found;
+				if (parsed?.chunks_found) metrics.chunksProcessed += parsed.chunks_found;
+
+				// Extract response length
+				if (parsed?.response_length) metrics.responseLength = parsed.response_length;
+
+				// Extract token usage metrics
+				if (parsed?.token_usage) {
+					if (parsed.token_usage.prompt_tokens) {
+						metrics.tokenUsage.prompt += parsed.token_usage.prompt_tokens;
+						metrics.inputTokens += parsed.token_usage.prompt_tokens;
+					}
+					if (parsed.token_usage.completion_tokens) {
+						metrics.tokenUsage.completion += parsed.token_usage.completion_tokens;
+						metrics.outputTokens += parsed.token_usage.completion_tokens;
+					}
+					if (parsed.token_usage.total_tokens) {
+						metrics.tokenUsage.total += parsed.token_usage.total_tokens;
+						metrics.totalTokens += parsed.token_usage.total_tokens;
+					}
+				}
+
+				// Alternative token field names
+				if (parsed?.tokens) {
+					metrics.totalTokens += parsed.tokens;
+					metrics.tokenUsage.total += parsed.tokens;
+				}
+				if (parsed?.input_tokens) {
+					metrics.inputTokens += parsed.input_tokens;
+					metrics.tokenUsage.prompt += parsed.input_tokens;
+				}
+				if (parsed?.output_tokens) {
+					metrics.outputTokens += parsed.output_tokens;
+					metrics.tokenUsage.completion += parsed.output_tokens;
+				}
+			});
+
+			// Calculate processing rate
+			if (metrics.totalDuration > 0) {
+				metrics.processingRate = content.length / (metrics.totalDuration / 1000);
+			}
+
+			return metrics;
+		} catch {
+			return {};
 		}
 	}
 
@@ -589,61 +732,99 @@
 		return sanitizeDisplayContent(content);
 	}
 
-	function renderWorkflowTimeline(data: any): string {
+	function renderEnhancedWorkflowTimeline(data: any): string {
 		if (!Array.isArray(data)) {
-			return '<div class="text-gray-500 dark:text-gray-400">No timeline data available</div>';
+			return '<div class="text-gray-500 dark:text-gray-400 text-center py-8">No timeline data available</div>';
 		}
 
-		let html = '<div class="space-y-4">';
+		let html = '<div class="space-y-6">';
 
-		// Add workflow summary at the top
+		// Enhanced workflow summary at the top
+		const metadata = extractWorkflowMetadata(data);
+		const metrics = extractPerformanceMetrics(data);
 		const userQuestion = extractUserQuestion(data);
-		const chatHistory = extractChatHistory(data);
-		const keyFindings = extractKeyFindings(data);
 
-		if (
-			userQuestion !== 'Not found' ||
-			chatHistory !== 'Not found' ||
-			keyFindings !== 'None found'
-		) {
-			html += `
-				<div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg border border-blue-200 dark:border-blue-700 p-4 mb-6">
-					<h3 class="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-3">Workflow Summary</h3>
-					<div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-						${
-							userQuestion !== 'Not found'
-								? `
-							<div>
-								<span class="font-medium text-gray-700 dark:text-gray-300">User Question:</span>
-								<p class="text-gray-600 dark:text-gray-400 mt-1 truncate" title="${escapeHtml(userQuestion)}">${escapeHtml(userQuestion)}</p>
-							</div>
-						`
-								: ''
-						}
-						${
-							chatHistory !== 'Not found'
-								? `
-							<div>
-								<span class="font-medium text-gray-700 dark:text-gray-300">Chat History:</span>
-								<p class="text-gray-600 dark:text-gray-400 mt-1">${chatHistory}</p>
-							</div>
-						`
-								: ''
-						}
-						${
-							keyFindings !== 'None found'
-								? `
-							<div>
-								<span class="font-medium text-gray-700 dark:text-gray-300">Key Findings:</span>
-								<p class="text-gray-600 dark:text-gray-400 mt-1">${keyFindings}</p>
-							</div>
-						`
-								: ''
-						}
+		// Workflow Overview Card
+		html += `
+			<div class="bg-gradient-to-r from-indigo-50 via-purple-50 to-pink-50 dark:from-indigo-900/20 dark:via-purple-900/20 dark:to-pink-900/20 rounded-xl border border-indigo-200 dark:border-indigo-700 p-6 mb-8">
+				<div class="flex items-center gap-4 mb-4">
+					<div class="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+						<svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+						</svg>
+					</div>
+					<div>
+						<h3 class="text-lg font-bold text-gray-900 dark:text-white">Workflow Execution Overview</h3>
+						<p class="text-sm text-gray-600 dark:text-gray-400">AI-powered analysis and performance insights</p>
 					</div>
 				</div>
-			`;
-		}
+				
+				<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+					<div class="space-y-2">
+						<h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">User Question</h4>
+						<div class="bg-white/50 dark:bg-gray-800/50 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+							<p class="text-sm text-gray-900 dark:text-white leading-relaxed line-clamp-3" title="${escapeHtml(userQuestion)}">
+								${userQuestion !== 'Not found' ? escapeHtml(userQuestion) : 'No user question found'}
+							</p>
+						</div>
+					</div>
+					
+					<div class="space-y-2">
+						<h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Performance</h4>
+						<div class="space-y-1">
+							<div class="flex justify-between text-sm">
+								<span class="text-gray-600 dark:text-gray-400">Duration:</span>
+								<span class="font-medium text-gray-900 dark:text-white">${calculateWorkflowDuration(data)}</span>
+							</div>
+							<div class="flex justify-between text-sm">
+								<span class="text-gray-600 dark:text-gray-400">Steps:</span>
+								<span class="font-medium text-gray-900 dark:text-white">${metadata.totalSteps}</span>
+							</div>
+							<div class="flex justify-between text-sm">
+								<span class="text-gray-600 dark:text-gray-400">Entities:</span>
+								<span class="font-medium text-gray-900 dark:text-white">${metrics.entitiesFound}</span>
+							</div>
+						</div>
+					</div>
+					
+					<div class="space-y-2">
+						<h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Status</h4>
+						<div class="space-y-1">
+							<div class="flex justify-between text-sm">
+								<span class="text-gray-600 dark:text-gray-400">Success:</span>
+								<span class="font-medium text-green-600 dark:text-green-400">${metadata.successCount}</span>
+							</div>
+							<div class="flex justify-between text-sm">
+								<span class="text-gray-600 dark:text-gray-400">Errors:</span>
+								<span class="font-medium text-red-600 dark:text-red-400">${metadata.errorCount}</span>
+							</div>
+							<div class="flex justify-between text-sm">
+								<span class="text-gray-600 dark:text-gray-400">Warnings:</span>
+								<span class="font-medium text-yellow-600 dark:text-yellow-400">${metadata.warningCount}</span>
+							</div>
+						</div>
+					</div>
+					
+					<div class="space-y-2">
+						<h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300 uppercase tracking-wide">Metadata</h4>
+						<div class="space-y-1">
+							<div class="flex justify-between text-sm">
+								<span class="text-gray-600 dark:text-gray-400">Chat ID:</span>
+								<span class="font-mono text-gray-900 dark:text-white text-xs truncate max-w-20" title="${metadata.chatId}">${metadata.chatId || 'N/A'}</span>
+							</div>
+							<div class="flex justify-between text-sm">
+								<span class="text-gray-600 dark:text-gray-400">Workflow:</span>
+								<span class="font-medium text-gray-900 dark:text-white">${metadata.workflowId || 'N/A'}</span>
+							</div>
+							<div class="flex justify-between text-sm">
+								<span class="text-gray-600 dark:text-gray-400">Thread:</span>
+								<span class="font-medium text-gray-900 dark:text-white">${metadata.threadId || 'N/A'}</span>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		`;
 
 		data.forEach((item, index) => {
 			try {
@@ -651,104 +832,158 @@
 				const timestamp = entry.timestamp || entry.time || entry.created_at || entry.ts;
 				const level = entry.level || entry.severity || 'INFO';
 				const message = entry.message || entry.msg || entry.text || '';
-				const step = entry.step || entry.phase || entry.stage || '';
-				const duration = entry.duration || entry.execution_time || '';
-				const entities = entry.entities || entry.documents || entry.relationships || [];
+				const eventType = entry.event_type || '';
+				const duration = entry.duration_ms || entry.duration || entry.execution_time || '';
+				const entities =
+					entry.entities_found || entry.entities || entry.documents || entry.relationships || [];
 				const errors = entry.errors || entry.error || '';
 				const data = entry.data || entry.result || entry.output || '';
 				const metadata = entry.metadata || entry.context || entry.params || '';
+				const tokenUsage = entry.token_usage || {};
+				const tokens = entry.tokens || tokenUsage.total_tokens || 0;
+				const inputTokens = entry.input_tokens || tokenUsage.prompt_tokens || 0;
+				const outputTokens = entry.output_tokens || tokenUsage.completion_tokens || 0;
 
-				// Determine status color and icon based on message content
+				// Enhanced status detection with better visual indicators
 				let statusColor =
 					'bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800';
-				let statusIcon = 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'; // clock icon
+				let statusIcon = 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z';
+				let stepInfo = '';
 
-				// Enhanced status detection based on message content
-				if (
+				// Determine step info and status based on event type and message
+				if (eventType) {
+					stepInfo = eventType.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+				} else if (message.includes('BEFORE_EXECUTE')) {
+					stepInfo = 'Initialization';
+					statusColor =
+						'bg-indigo-100 dark:bg-indigo-900/20 text-indigo-800 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800';
+					statusIcon =
+						'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4';
+				} else if (message.includes('AFTER_EXECUTE')) {
+					stepInfo = 'Completion';
+					statusColor =
+						'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800';
+					statusIcon = 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z';
+				} else if (
 					level === 'ERROR' ||
 					errors ||
 					message.includes('error') ||
 					message.includes('failed')
 				) {
+					stepInfo = 'Error';
 					statusColor =
 						'bg-red-100 dark:bg-red-900/20 text-red-800 dark:text-red-300 border-red-200 dark:border-red-800';
-					statusIcon = 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'; // error icon
+					statusIcon = 'M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z';
 				} else if (level === 'WARNING' || message.includes('warning')) {
+					stepInfo = 'Warning';
 					statusColor =
 						'bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800';
 					statusIcon =
-						'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z'; // warning icon
-				} else if (
-					level === 'SUCCESS' ||
-					message.includes('completed') ||
-					message.includes('finished') ||
-					message.includes('success') ||
-					message.includes('found') ||
-					message.includes('extracted')
-				) {
-					statusColor =
-						'bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 border-green-200 dark:border-green-800';
-					statusIcon = 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'; // success icon
+						'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z';
 				} else if (
 					message.includes('processing') ||
 					message.includes('executing') ||
 					message.includes('running')
 				) {
+					stepInfo = 'Processing';
 					statusColor =
 						'bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800';
-					statusIcon = 'M13 10V3L4 14h7v7l9-11h-7z'; // lightning icon
+					statusIcon = 'M13 10V3L4 14h7v7l9-11h-7z';
+				} else if (
+					message.includes('found') ||
+					message.includes('extracted') ||
+					message.includes('completed')
+				) {
+					stepInfo = 'Success';
+					statusColor =
+						'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800';
+					statusIcon = 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z';
 				}
 
-				// Extract meaningful step information
-				let stepInfo = step;
-				if (!stepInfo) {
-					if (message.includes('initialized')) stepInfo = 'Initialization';
-					else if (message.includes('processing')) stepInfo = 'Processing';
-					else if (message.includes('extracting')) stepInfo = 'Extraction';
-					else if (message.includes('analyzing')) stepInfo = 'Analysis';
-					else if (message.includes('generating')) stepInfo = 'Generation';
-					else if (message.includes('completed')) stepInfo = 'Completion';
-				}
-
+				// Enhanced timeline entry with better visual design
 				html += `
-					<div class="flex gap-4 p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 hover:shadow-sm transition-shadow">
-						<!-- Timeline connector -->
+					<div class="group relative flex gap-6 p-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 hover:shadow-lg hover:border-gray-300 dark:hover:border-gray-600 transition-all duration-200 ${selectedEntry === index ? 'ring-2 ring-blue-500 ring-offset-2' : ''}">
+						<!-- Enhanced Timeline connector -->
 						<div class="flex flex-col items-center">
-							<div class="w-8 h-8 ${statusColor} rounded-full border-2 flex items-center justify-center flex-shrink-0">
-								<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<div class="w-12 h-12 ${statusColor} rounded-full border-2 flex items-center justify-center flex-shrink-0 shadow-lg group-hover:scale-110 transition-transform duration-200">
+								<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${statusIcon}"/>
 								</svg>
 							</div>
-							${index < data.length - 1 ? '<div class="w-0.5 h-8 bg-gray-300 dark:bg-gray-600 mt-2"></div>' : ''}
+							${index < data.length - 1 ? '<div class="w-1 h-12 bg-gradient-to-b from-gray-300 to-gray-200 dark:from-gray-600 dark:to-gray-500 mt-2 rounded-full"></div>' : ''}
 						</div>
 						
-						<!-- Content -->
+						<!-- Enhanced Content -->
 						<div class="flex-1 min-w-0">
-							<div class="flex items-start justify-between gap-4 mb-2">
+							<div class="flex items-start justify-between gap-4 mb-3">
 								<div class="flex-1">
-									<div class="flex items-center gap-2 mb-1">
-										${stepInfo ? `<span class="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs font-medium">${escapeHtml(stepInfo)}</span>` : ''}
-										<span class="px-2 py-1 ${statusColor} rounded text-xs font-medium border">${level}</span>
+									<div class="flex items-center gap-3 mb-2">
+										${stepInfo ? `<span class="px-3 py-1 bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 text-gray-700 dark:text-gray-300 rounded-full text-sm font-medium shadow-sm">${escapeHtml(stepInfo)}</span>` : ''}
+										<span class="px-3 py-1 ${statusColor} rounded-full text-sm font-medium border shadow-sm">${level}</span>
+										${duration ? `<span class="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded text-xs font-mono">${duration}ms</span>` : ''}
+										${tokens > 0 ? `<span class="px-2 py-1 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 rounded text-xs font-mono">${formatTokenUsage(tokens)} tokens</span>` : ''}
 									</div>
-									<p class="text-sm font-medium text-gray-900 dark:text-white">${escapeHtml(message)}</p>
+									<p class="text-base font-medium text-gray-900 dark:text-white leading-relaxed">${escapeHtml(message)}</p>
 								</div>
-								<div class="text-right text-xs text-gray-500 dark:text-gray-400">
-									${timestamp ? `<div>${formatTimelineTimestamp(timestamp)}</div>` : ''}
-									${duration ? `<div class="mt-1">${duration}</div>` : ''}
+								<div class="text-right text-sm text-gray-500 dark:text-gray-400">
+									${timestamp ? `<div class="font-mono">${formatTimelineTimestamp(timestamp)}</div>` : ''}
 								</div>
 							</div>
 							
-							<!-- Enhanced data preview -->
+							<!-- Enhanced data preview with better organization -->
 							${
-								entities.length > 0 || data || metadata
+								entities > 0 || data || metadata || errors || tokens > 0
 									? `
-								<div class="mt-3 space-y-2">
+								<div class="mt-4 space-y-3">
 									${
-										entities.length > 0
+										tokens > 0
 											? `
-										<div class="flex items-center gap-4 text-xs text-gray-600 dark:text-gray-400">
-											<span>📄 ${entities.length} items processed</span>
-											${entry.count ? `<span>📊 ${entry.count} total</span>` : ''}
+										<div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-4 border border-green-200 dark:border-green-700">
+											<div class="text-sm font-semibold text-green-700 dark:text-green-300 mb-2 flex items-center gap-2">
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+												</svg>
+												Token Usage
+											</div>
+											<div class="grid grid-cols-3 gap-4 text-sm">
+												<div class="text-center">
+													<div class="font-bold text-green-600 dark:text-green-400">{formatTokenUsage(tokens)}</div>
+													<div class="text-green-600 dark:text-green-400">Total</div>
+												</div>
+												<div class="text-center">
+													<div class="font-bold text-blue-600 dark:text-blue-400">{formatTokenUsage(inputTokens)}</div>
+													<div class="text-blue-600 dark:text-blue-400">Input</div>
+												</div>
+												<div class="text-center">
+													<div class="font-bold text-orange-600 dark:text-orange-400">{formatTokenUsage(outputTokens)}</div>
+													<div class="text-orange-600 dark:text-orange-400">Output</div>
+												</div>
+											</div>
+										</div>
+									`
+											: ''
+									}
+									
+									${
+										entities > 0
+											? `
+										<div class="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900/50 rounded-lg p-3">
+											<span class="flex items-center gap-2">
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+												</svg>
+												${entities} entities processed
+											</span>
+											${
+												entry.count
+													? `<span class="flex items-center gap-2">
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+												</svg>
+												${entry.count} total
+											</span>`
+													: ''
+											}
 										</div>
 									`
 											: ''
@@ -757,9 +992,14 @@
 									${
 										data
 											? `
-										<div class="bg-gray-50 dark:bg-gray-900/50 rounded p-2 border border-gray-200 dark:border-gray-700">
-											<div class="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Data/Output:</div>
-											<pre class="text-xs text-gray-600 dark:text-gray-400 overflow-auto max-h-20">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
+										<div class="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-900/50 dark:to-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+											<div class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center gap-2">
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+												</svg>
+												Data/Output
+											</div>
+											<pre class="text-sm text-gray-600 dark:text-gray-400 overflow-auto max-h-32 bg-white dark:bg-gray-800 p-3 rounded border">${escapeHtml(JSON.stringify(data, null, 2))}</pre>
 										</div>
 									`
 											: ''
@@ -768,9 +1008,30 @@
 									${
 										metadata
 											? `
-										<div class="bg-blue-50 dark:bg-blue-900/20 rounded p-2 border border-blue-200 dark:border-blue-700">
-											<div class="text-xs font-medium text-blue-700 dark:text-blue-300 mb-1">Context/Metadata:</div>
-											<pre class="text-xs text-blue-600 dark:text-blue-400 overflow-auto max-h-20">${escapeHtml(JSON.stringify(metadata, null, 2))}</pre>
+										<div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
+											<div class="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-2">
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+												</svg>
+												Context/Metadata
+											</div>
+											<pre class="text-sm text-blue-600 dark:text-blue-400 overflow-auto max-h-32 bg-white/50 dark:bg-gray-800/50 p-3 rounded border">${escapeHtml(JSON.stringify(metadata, null, 2))}</pre>
+										</div>
+									`
+											: ''
+									}
+									
+									${
+										errors
+											? `
+										<div class="bg-gradient-to-r from-red-50 to-pink-50 dark:from-red-900/20 dark:to-pink-900/20 rounded-lg p-4 border border-red-200 dark:border-red-800">
+											<div class="text-sm font-semibold text-red-700 dark:text-red-300 mb-2 flex items-center gap-2">
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+												</svg>
+												Error Details
+											</div>
+											<div class="text-sm text-red-700 dark:text-red-300 bg-white/50 dark:bg-gray-800/50 p-3 rounded border">${escapeHtml(errors)}</div>
 										</div>
 									`
 											: ''
@@ -780,27 +1041,20 @@
 									: ''
 							}
 							
-							<!-- Error details -->
-							${
-								errors
-									? `
-								<div class="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-300">
-									<strong>Error:</strong> ${escapeHtml(errors)}
-								</div>
-							`
-									: ''
-							}
-							
-							<!-- Raw entry toggle -->
-							<div class="mt-2">
+							<!-- Enhanced raw entry toggle -->
+							<div class="mt-4">
 								<button 
 									onclick="toggleRawEntry(${index})" 
-									class="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 underline"
+									class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 font-medium flex items-center gap-2 transition-colors duration-200"
 								>
+									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+									</svg>
 									Show raw entry
 								</button>
-								<div id="raw-entry-${index}" class="hidden mt-2">
-									<pre class="text-xs bg-gray-100 dark:bg-gray-800 p-2 rounded border overflow-auto max-h-32 text-gray-600 dark:text-gray-400">${escapeHtml(JSON.stringify(entry, null, 2))}</pre>
+								<div id="raw-entry-${index}" class="hidden mt-3">
+									<pre class="text-sm bg-gray-100 dark:bg-gray-800 p-4 rounded-lg border overflow-auto max-h-48 text-gray-600 dark:text-gray-400 font-mono">${escapeHtml(JSON.stringify(entry, null, 2))}</pre>
 								</div>
 							</div>
 						</div>
@@ -967,85 +1221,28 @@
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-	<!-- Enhanced Header -->
-	<div class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
+	<!-- Minimal Header -->
+	<div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
 		<div class="px-4 sm:px-6 py-4">
-			<div class="flex items-center gap-4">
-				<button
-					on:click={goBack}
-					class="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-					aria-label="Back to Log Management"
-					title="Return to log management list"
-				>
-					<ArrowLeft className="w-5 h-5" />
-				</button>
-
-				<div class="min-w-0 flex-1">
-					<div class="flex items-center gap-3">
-						<div class="flex-shrink-0">
-							<div
-								class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-sm"
-							>
-								<svg
-									class="w-5 h-5 text-white"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-									/>
-								</svg>
-							</div>
-						</div>
-						<div>
-							<h1
-								class="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white"
-								id="log-viewer-title"
-							>
-								Workflow Execution Log
-							</h1>
-							<div class="flex items-center gap-2 mt-1">
-								{#if filename?.includes('session_')}
-									<span
-										class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-800"
-									>
-										<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-											<path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-										</svg>
-										Consolidated Session
-									</span>
-								{:else if filename?.startsWith('trace_')}
-									<span
-										class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
-									>
-										<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-											<path
-												d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"
-											/>
-										</svg>
-										Individual Trace
-									</span>
-								{/if}
-								<p
-									class="text-sm text-gray-600 dark:text-gray-400 truncate"
-									title={filename || 'Loading...'}
-								>
-									{filename || 'Loading...'}
-								</p>
-							</div>
-						</div>
-					</div>
+			<div class="flex items-center justify-between">
+				<div class="flex items-center gap-3">
+					<button
+						on:click={goBack}
+						class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
+						aria-label="Back to Log Management"
+						title="Return to log management list"
+					>
+						<ArrowLeft className="w-4 h-4" />
+					</button>
+					<div class="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+					<h1 class="text-lg font-medium text-gray-900 dark:text-white">Workflow Log Viewer</h1>
 				</div>
 			</div>
 		</div>
 	</div>
 
 	<!-- Content -->
-	<div class="px-4 sm:px-6 py-8">
+	<div class="px-4 sm:px-6 py-6">
 		{#if loading}
 			<div class="flex items-center justify-center py-12" role="status" aria-live="polite">
 				<div class="text-center">
@@ -1156,345 +1353,17 @@
 			</div>
 		{:else if logContent}
 			<div class="max-w-7xl mx-auto space-y-6">
-				<!-- Enhanced File Properties Card -->
+				<!-- File Information Box -->
 				<div
-					class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700 transition-shadow hover:shadow-md"
-					role="region"
-					aria-labelledby="file-info-heading"
+					class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4"
 				>
-					<div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
-						<div class="flex items-center gap-3">
-							<div class="flex-shrink-0">
-								<div
-									class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center shadow-sm"
-								>
-									<svg
-										class="w-5 h-5 text-white"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-										/>
-									</svg>
-								</div>
-							</div>
-							<div>
-								<h2
-									class="text-lg font-semibold text-gray-900 dark:text-white"
-									id="file-info-heading"
-								>
-									Workflow Properties
-								</h2>
-								<p class="text-sm text-gray-500 dark:text-gray-400">
-									Execution details and performance metrics
-								</p>
-							</div>
-						</div>
-					</div>
-					<div class="px-6 py-6">
-						<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-							<!-- File Details -->
-							<div class="space-y-4">
-								<h3
-									class="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide"
-								>
-									File Details
-								</h3>
-								<div class="space-y-3">
-									<div class="flex items-center justify-between">
-										<span class="text-sm text-gray-600 dark:text-gray-400">Filename</span>
-										<span
-											class="text-sm font-mono text-gray-900 dark:text-white truncate max-w-32"
-											title={logContent.filename}
-										>
-											{logContent.filename}
-										</span>
-									</div>
-									<div class="flex items-center justify-between">
-										<span class="text-sm text-gray-600 dark:text-gray-400">Size</span>
-										<span class="text-sm font-medium text-gray-900 dark:text-white">
-											{formatFileSize(logContent.size)}
-										</span>
-									</div>
-									<div class="flex items-center justify-between">
-										<span class="text-sm text-gray-600 dark:text-gray-400">Modified</span>
-										<span class="text-sm font-medium text-gray-900 dark:text-white">
-											{formatDate(logContent.modified)}
-										</span>
-									</div>
-								</div>
-							</div>
-
-							<!-- Workflow Metrics -->
-							<div class="space-y-4">
-								<h3
-									class="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide"
-								>
-									Execution Metrics
-								</h3>
-								<div class="space-y-3">
-									<div class="flex items-center justify-between">
-										<span class="text-sm text-gray-600 dark:text-gray-400">Log Entries</span>
-										<span class="text-sm font-medium text-blue-600 dark:text-blue-400">
-											{Array.isArray(logContent.content) ? logContent.content.length : 'N/A'}
-										</span>
-									</div>
-									<div class="flex items-center justify-between">
-										<span class="text-sm text-gray-600 dark:text-gray-400">Duration</span>
-										<span class="text-sm font-medium text-green-600 dark:text-green-400">
-											{calculateWorkflowDuration(logContent.content)}
-										</span>
-									</div>
-									<div class="flex items-center justify-between">
-										<span class="text-sm text-gray-600 dark:text-gray-400">Status</span>
-										<span class="text-sm font-medium text-purple-600 dark:text-purple-400">
-											{getWorkflowStatus(logContent.content)}
-										</span>
-									</div>
-								</div>
-							</div>
-
-							<!-- Workflow Analysis -->
-							<div class="space-y-4">
-								<h3
-									class="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide"
-								>
-									Workflow Analysis
-								</h3>
-								<div class="space-y-3">
-									<div class="flex items-center justify-between">
-										<span class="text-sm text-gray-600 dark:text-gray-400">User Question</span>
-										<span
-											class="text-sm font-medium text-orange-600 dark:text-orange-400 max-w-32 truncate"
-											title={extractUserQuestion(logContent.content)}
-										>
-											{extractUserQuestion(logContent.content)}
-										</span>
-									</div>
-									<div class="flex items-center justify-between">
-										<span class="text-sm text-gray-600 dark:text-gray-400">Chat History</span>
-										<span class="text-sm font-medium text-indigo-600 dark:text-indigo-400">
-											{extractChatHistory(logContent.content)}
-										</span>
-									</div>
-									<div class="flex items-center justify-between">
-										<span class="text-sm text-gray-600 dark:text-gray-400">Processing Steps</span>
-										<span class="text-sm font-medium text-teal-600 dark:text-teal-400">
-											{extractWorkflowSteps(logContent.content)}
-										</span>
-									</div>
-								</div>
-							</div>
-
-							<!-- Results & Performance -->
-							<div class="space-y-4">
-								<h3
-									class="text-sm font-medium text-gray-700 dark:text-gray-300 uppercase tracking-wide"
-								>
-									Results & Performance
-								</h3>
-								<div class="space-y-3">
-									<div class="flex items-center justify-between">
-										<span class="text-sm text-gray-600 dark:text-gray-400">Key Findings</span>
-										<span class="text-sm font-medium text-emerald-600 dark:text-emerald-400">
-											{extractKeyFindings(logContent.content)}
-										</span>
-									</div>
-									<div class="flex items-center justify-between">
-										<span class="text-sm text-gray-600 dark:text-gray-400">Processing Rate</span>
-										<span class="text-sm font-medium text-amber-600 dark:text-amber-400">
-											{calculateProcessingRate(logContent.content)}
-										</span>
-									</div>
-									<div class="flex items-center justify-between">
-										<span class="text-sm text-gray-600 dark:text-gray-400">Errors</span>
-										<span class="text-sm font-medium text-red-600 dark:text-red-400">
-											{countErrors(logContent.content)}
-										</span>
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
-				</div>
-
-				<!-- Enhanced Workflow Execution Viewer -->
-				<div
-					class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700"
-				>
-					<div class="px-6 py-5 border-b border-gray-200 dark:border-gray-700">
-						<div class="flex items-center justify-between">
-							<div class="flex items-center gap-3">
-								<div class="flex-shrink-0">
-									<div
-										class="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-sm"
-									>
-										<svg
-											class="w-5 h-5 text-white"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
-											/>
-										</svg>
-									</div>
-								</div>
-								<div>
-									<h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-										Workflow Execution Steps
-									</h2>
-									<p class="text-sm text-gray-500 dark:text-gray-400">
-										Interactive timeline of workflow processing steps
-									</p>
-								</div>
-							</div>
-							<div class="flex items-center gap-3">
-								{#if isValidJSON(logContent.content)}
-									<div class="flex items-center gap-2">
-										<button
-											on:click={() => (viewMode = 'timeline')}
-											class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors {viewMode ===
-											'timeline'
-												? 'bg-emerald-100 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300'
-												: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}"
-										>
-											Timeline
-										</button>
-										<button
-											on:click={() => (viewMode = 'tree')}
-											class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors {viewMode ===
-											'tree'
-												? 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-												: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}"
-										>
-											Tree View
-										</button>
-										<button
-											on:click={() => (viewMode = 'raw')}
-											class="px-3 py-1.5 text-xs font-medium rounded-md transition-colors {viewMode ===
-											'raw'
-												? 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-												: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600'}"
-										>
-											Raw JSON
-										</button>
-									</div>
-									<span
-										class="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-800 dark:text-emerald-200 rounded-full text-xs font-medium"
-									>
-										Structured Data
-									</span>
-								{:else}
-									<span
-										class="px-2 py-1 bg-gray-100 dark:bg-gray-900/20 text-gray-800 dark:text-gray-200 rounded-full text-xs font-medium"
-									>
-										Plain Text
-									</span>
-								{/if}
-							</div>
-						</div>
-					</div>
-					<div class="px-6 py-6">
-						{#if logContent.content}
-							<div class="relative">
-								{#if isValidJSON(logContent.content) && viewMode === 'timeline'}
-									<!-- Workflow Timeline View -->
-									<div
-										class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
-									>
-										<div class="max-h-96 lg:max-h-[32rem] overflow-auto">
-											<div class="p-4">
-												{@html renderWorkflowTimeline(logContent.content)}
-											</div>
-										</div>
-									</div>
-								{:else if isValidJSON(logContent.content) && viewMode === 'tree'}
-									<!-- Hierarchical JSON Tree View -->
-									<div
-										class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
-									>
-										<div class="max-h-96 lg:max-h-[32rem] overflow-auto">
-											<div class="p-4">
-												{@html renderJsonTree(logContent.content)}
-											</div>
-										</div>
-									</div>
-								{:else if isValidJSON(logContent.content) && viewMode === 'raw'}
-									<!-- Raw JSON with syntax highlighting -->
-									<div
-										class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
-									>
-										<pre
-											class="text-xs sm:text-sm p-4 overflow-auto max-h-96 lg:max-h-[32rem] text-gray-900 dark:text-white font-mono leading-relaxed"
-											style="white-space: pre-wrap; word-wrap: break-word;"><code
-												class="language-json">{formatContent(logContent.content)}</code
-											></pre>
-									</div>
-								{:else}
-									<!-- Plain text content -->
-									<div
-										class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
-									>
-										<pre
-											class="text-xs sm:text-sm p-4 overflow-auto max-h-96 lg:max-h-[32rem] text-gray-900 dark:text-white font-mono leading-relaxed"
-											style="white-space: pre-wrap; word-wrap: break-word;">{formatContent(
-												logContent.content
-											)}</pre>
-									</div>
-								{/if}
-
-								<!-- Action buttons -->
-								<div class="absolute top-3 right-3 flex gap-2">
-									<button
-										class="p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 shadow-sm"
-										on:click={async () => {
-											try {
-												const contentToCopy = formatContent(logContent.content);
-												if (contentToCopy.length > 100000) {
-													toast.error('Content too large to copy to clipboard');
-													return;
-												}
-												await navigator.clipboard.writeText(contentToCopy);
-												toast.success('Content copied to clipboard');
-											} catch (err) {
-												console.error('Failed to copy to clipboard:', err);
-												toast.error('Failed to copy content to clipboard');
-											}
-										}}
-										title="Copy log content to clipboard"
-										aria-label="Copy log content to clipboard"
-									>
-										<svg
-											class="w-4 h-4 text-gray-600 dark:text-gray-400"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-											aria-hidden="true"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												stroke-width="2"
-												d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-											/>
-										</svg>
-									</button>
-								</div>
-							</div>
-						{:else}
-							<div class="text-center py-12 text-gray-500 dark:text-gray-400" role="status">
+					<div class="flex items-center justify-between">
+						<div class="flex items-center gap-4">
+							<div
+								class="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center"
+							>
 								<svg
-									class="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600"
+									class="w-5 h-5 text-blue-600 dark:text-blue-400"
 									fill="none"
 									stroke="currentColor"
 									viewBox="0 0 24 24"
@@ -1506,154 +1375,250 @@
 										d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
 									/>
 								</svg>
+							</div>
+							<div>
+								<h2 class="text-lg font-medium text-gray-900 dark:text-white">{filename}</h2>
+								<div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
+									<span>{formatFileSize(logContent.size)}</span>
+									<span>•</span>
+									<span>{formatDate(logContent.modified)}</span>
+									{#if Array.isArray(logContent.content)}
+										{@const metadata = extractWorkflowMetadata(logContent.content)}
+										{#if metadata.chatId}
+											<span>•</span>
+											<span class="font-mono text-xs">{metadata.chatId}</span>
+										{/if}
+									{/if}
+								</div>
+							</div>
+						</div>
+						<div class="flex items-center gap-2">
+							<button
+								on:click={() => fetchLogContent(true)}
+								class="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+								disabled={loading || isRetrying}
+							>
+								{loading || isRetrying ? 'Refreshing...' : 'Refresh'}
+							</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- Tabs -->
+				<div
+					class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
+				>
+					<div class="border-b border-gray-200 dark:border-gray-700">
+						<nav class="flex space-x-8 px-6">
+							<button
+								on:click={() => (viewMode = 'timeline')}
+								class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {viewMode ===
+								'timeline'
+									? 'border-blue-500 text-blue-600 dark:text-blue-400'
+									: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'}"
+							>
+								Timeline
+							</button>
+							<button
+								on:click={() => (viewMode = 'tree')}
+								class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {viewMode ===
+								'tree'
+									? 'border-blue-500 text-blue-600 dark:text-blue-400'
+									: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'}"
+							>
+								Tree View
+							</button>
+							<button
+								on:click={() => (viewMode = 'raw')}
+								class="py-4 px-1 border-b-2 font-medium text-sm transition-colors {viewMode ===
+								'raw'
+									? 'border-blue-500 text-blue-600 dark:text-blue-400'
+									: 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'}"
+							>
+								Raw JSON
+							</button>
+						</nav>
+					</div>
+					<!-- Tab Content -->
+					<div class="p-6">
+						{#if logContent.content}
+							{#if isValidJSON(logContent.content) && viewMode === 'timeline'}
+								<!-- Compact Timeline Table -->
+								<div class="overflow-hidden">
+									<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+										<thead class="bg-gray-50 dark:bg-gray-800">
+											<tr>
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+													>Step</th
+												>
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+													>Time</th
+												>
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+													>Level</th
+												>
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+													>Message</th
+												>
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+													>Duration</th
+												>
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+													>Tokens</th
+												>
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+													>Actions</th
+												>
+											</tr>
+										</thead>
+										<tbody
+											class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700"
+										>
+											{#each logContent.content as item, index}
+												{@const entry = typeof item === 'string' ? JSON.parse(item) : item}
+												{@const timestamp =
+													entry.timestamp || entry.time || entry.created_at || entry.ts}
+												{@const level = entry.level || entry.severity || 'INFO'}
+												{@const message = entry.message || entry.msg || entry.text || ''}
+												{@const eventType = entry.event_type || ''}
+												{@const duration =
+													entry.duration_ms || entry.duration || entry.execution_time || ''}
+												{@const tokenUsage = entry.token_usage || {}}
+												{@const tokens = entry.tokens || tokenUsage.total_tokens || 0}
+
+												<tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+													<td
+														class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white"
+													>
+														{index + 1}
+													</td>
+													<td
+														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
+													>
+														{timestamp ? formatTimelineTimestamp(timestamp) : '-'}
+													</td>
+													<td class="px-6 py-4 whitespace-nowrap">
+														<span
+															class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {level ===
+															'ERROR'
+																? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
+																: level === 'WARNING'
+																	? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300'
+																	: level === 'SUCCESS'
+																		? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300'
+																		: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300'}"
+														>
+															{level}
+														</span>
+													</td>
+													<td
+														class="px-6 py-4 text-sm text-gray-900 dark:text-white max-w-md truncate"
+														title={message}
+													>
+														{message}
+													</td>
+													<td
+														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
+													>
+														{duration ? `${duration}ms` : '-'}
+													</td>
+													<td
+														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
+													>
+														{tokens > 0 ? formatTokenUsage(tokens) : '-'}
+													</td>
+													<td
+														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
+													>
+														<button
+															on:click={() =>
+																(selectedEntry = selectedEntry === index ? null : index)}
+															class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+														>
+															{selectedEntry === index ? 'Hide' : 'Details'}
+														</button>
+													</td>
+												</tr>
+												{#if selectedEntry === index}
+													<tr>
+														<td colspan="7" class="px-6 py-4 bg-gray-50 dark:bg-gray-800">
+															<div class="space-y-3">
+																<div class="grid grid-cols-2 gap-4 text-sm">
+																	<div>
+																		<span class="font-medium text-gray-700 dark:text-gray-300"
+																			>Event Type:</span
+																		>
+																		<span class="ml-2 text-gray-600 dark:text-gray-400"
+																			>{eventType || 'N/A'}</span
+																		>
+																	</div>
+																	<div>
+																		<span class="font-medium text-gray-700 dark:text-gray-300"
+																			>Full Message:</span
+																		>
+																		<span class="ml-2 text-gray-600 dark:text-gray-400"
+																			>{message}</span
+																		>
+																	</div>
+																</div>
+																{#if entry.data || entry.metadata || entry.errors}
+																	<div class="border-t border-gray-200 dark:border-gray-700 pt-3">
+																		<details class="text-sm">
+																			<summary
+																				class="cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+																			>
+																				Show Raw Data
+																			</summary>
+																			<pre
+																				class="mt-2 p-3 bg-gray-100 dark:bg-gray-700 rounded text-xs overflow-auto max-h-48">{JSON.stringify(
+																					entry,
+																					null,
+																					2
+																				)}</pre>
+																		</details>
+																	</div>
+																{/if}
+															</div>
+														</td>
+													</tr>
+												{/if}
+											{/each}
+										</tbody>
+									</table>
+								</div>
+							{:else if isValidJSON(logContent.content) && viewMode === 'tree'}
+								<!-- Compact Tree View -->
+								<div class="overflow-auto max-h-[40rem]">
+									{@html renderEnhancedJsonTree(logContent.content)}
+								</div>
+							{:else if isValidJSON(logContent.content) && viewMode === 'raw'}
+								<!-- Raw JSON -->
+								<pre
+									class="text-sm overflow-auto max-h-[40rem] text-gray-900 dark:text-white font-mono leading-relaxed bg-gray-50 dark:bg-gray-800 p-4 rounded border"
+									style="white-space: pre-wrap; word-wrap: break-word;">
+									{formatContent(logContent.content)}
+								</pre>
+							{:else}
+								<!-- Plain text content -->
+								<pre
+									class="text-sm overflow-auto max-h-[40rem] text-gray-900 dark:text-white font-mono leading-relaxed bg-gray-50 dark:bg-gray-800 p-4 rounded border"
+									style="white-space: pre-wrap; word-wrap: break-word;">
+									{formatContent(logContent.content)}
+								</pre>
+							{/if}
+						{:else}
+							<div class="text-center py-12 text-gray-500 dark:text-gray-400">
 								<p class="text-lg font-medium">No content available</p>
 								<p class="text-sm">This log file appears to be empty or unreadable</p>
 							</div>
 						{/if}
-					</div>
-				</div>
-
-				<!-- Enhanced Workflow Actions Card -->
-				<div
-					class="bg-white dark:bg-gray-800 shadow-sm rounded-lg border border-gray-200 dark:border-gray-700"
-				>
-					<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-						<div class="flex items-center gap-3">
-							<div class="flex-shrink-0">
-								<div
-									class="w-8 h-8 bg-gradient-to-br from-amber-500 to-orange-600 rounded-lg flex items-center justify-center shadow-sm"
-								>
-									<svg
-										class="w-4 h-4 text-white"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-										/>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-										/>
-									</svg>
-								</div>
-							</div>
-							<div>
-								<h2 class="text-lg font-medium text-gray-900 dark:text-white">Workflow Actions</h2>
-								<p class="text-sm text-gray-500 dark:text-gray-400">
-									Manage and analyze workflow execution
-								</p>
-							</div>
-						</div>
-					</div>
-					<div class="px-6 py-4">
-						<div class="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-							<div class="flex flex-wrap gap-3">
-								<button
-									on:click={() => fetchLogContent(true)}
-									class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-									disabled={loading || isRetrying}
-								>
-									<svg
-										class="w-4 h-4 {loading || isRetrying ? 'animate-spin' : ''}"
-										fill="none"
-										stroke="currentColor"
-										viewBox="0 0 24 24"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-										/>
-									</svg>
-									{loading || isRetrying ? 'Refreshing...' : 'Refresh Log'}
-								</button>
-								<button
-									on:click={() => {
-										// Export workflow summary
-										const summary = generateWorkflowSummary(logContent.content);
-										const blob = new Blob([JSON.stringify(summary, null, 2)], {
-											type: 'application/json'
-										});
-										const url = URL.createObjectURL(blob);
-										const a = document.createElement('a');
-										a.href = url;
-										a.download = `workflow-summary-${filename?.replace(/[^a-zA-Z0-9]/g, '-')}.json`;
-										document.body.appendChild(a);
-										a.click();
-										document.body.removeChild(a);
-										URL.revokeObjectURL(url);
-										toast.success('Workflow summary exported');
-									}}
-									class="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2 shadow-sm"
-								>
-									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-										/>
-									</svg>
-									Export Summary
-								</button>
-								<button
-									on:click={() => {
-										// Export raw JSON data
-										const rawData = logContent.content;
-										const blob = new Blob([JSON.stringify(rawData, null, 2)], {
-											type: 'application/json'
-										});
-										const url = URL.createObjectURL(blob);
-										const a = document.createElement('a');
-										a.href = url;
-										a.download = `${filename?.replace(/[^a-zA-Z0-9]/g, '-')}.json`;
-										document.body.appendChild(a);
-										a.click();
-										document.body.removeChild(a);
-										URL.revokeObjectURL(url);
-										toast.success('Raw JSON data exported');
-									}}
-									class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 shadow-sm"
-								>
-									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-										/>
-									</svg>
-									Download JSON
-								</button>
-								<button
-									on:click={goBack}
-									class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2 shadow-sm"
-								>
-									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											stroke-width="2"
-											d="M10 19l-7-7m0 0l7-7m-7 7h18"
-										/>
-									</svg>
-									Back to Logs
-								</button>
-							</div>
-							{#if logContent?.timestamp}
-								<div class="sm:ml-auto text-sm text-gray-500 dark:text-gray-400">
-									Last updated: {formatDate(logContent.timestamp)}
-								</div>
-							{/if}
-						</div>
 					</div>
 				</div>
 			</div>
