@@ -1221,25 +1221,7 @@
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-	<!-- Minimal Header -->
-	<div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-		<div class="px-4 sm:px-6 py-4">
-			<div class="flex items-center justify-between">
-				<div class="flex items-center gap-3">
-					<button
-						on:click={goBack}
-						class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
-						aria-label="Back to Log Management"
-						title="Return to log management list"
-					>
-						<ArrowLeft className="w-4 h-4" />
-					</button>
-					<div class="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
-					<h1 class="text-lg font-medium text-gray-900 dark:text-white">Workflow Log Viewer</h1>
-				</div>
-			</div>
-		</div>
-	</div>
+	
 
 	<!-- Content -->
 	<div class="px-4 sm:px-6 py-6">
@@ -1357,10 +1339,22 @@
 				<div
 					class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700"
 				>
-					<!-- File Information Header -->
+					<!-- Combined Header with File Information -->
 					<div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
 						<div class="flex items-center justify-between">
 							<div class="flex items-center gap-4">
+								<!-- Back Button -->
+								<button
+									on:click={goBack}
+									class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
+									aria-label="Back to Log Management"
+									title="Return to log management list"
+								>
+									<ArrowLeft className="w-4 h-4" />
+								</button>
+								<div class="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
+								
+								<!-- File Icon and Info -->
 								<div
 									class="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center"
 								>
@@ -1379,8 +1373,10 @@
 									</svg>
 								</div>
 								<div>
-									<h2 class="text-lg font-medium text-gray-900 dark:text-white">{filename}</h2>
+									<h1 class="text-lg font-medium text-gray-900 dark:text-white">Workflow Log Viewer</h1>
 									<div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
+										<span class="font-medium">{filename}</span>
+										<span>•</span>
 										<span>{formatFileSize(logContent.size)}</span>
 										<span>•</span>
 										<span>{formatDate(logContent.modified)}</span>
@@ -1459,7 +1455,12 @@
 									class="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-2"
 								>
 									<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+										/>
 									</svg>
 									Download JSON
 								</button>
@@ -1475,25 +1476,39 @@
 									<table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
 										<thead class="bg-gray-50 dark:bg-gray-800">
 											<tr>
-												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700"
+												>
 													Step
 												</th>
-												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700"
+												>
 													Time
 												</th>
-												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700"
+												>
 													Level
 												</th>
-												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700"
+												>
 													Message
 												</th>
-												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700"
+												>
 													Duration
 												</th>
-												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700">
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700"
+												>
 													Tokens
 												</th>
-												<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+												<th
+													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
+												>
 													Actions
 												</th>
 											</tr>
@@ -1514,13 +1529,19 @@
 												{@const tokens = entry.tokens || tokenUsage.total_tokens || 0}
 
 												<tr class="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-													<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700">
+													<td
+														class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white border-r border-gray-200 dark:border-gray-700"
+													>
 														{index + 1}
 													</td>
-													<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">
+													<td
+														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700"
+													>
 														{timestamp ? formatTimelineTimestamp(timestamp) : '-'}
 													</td>
-													<td class="px-6 py-4 whitespace-nowrap border-r border-gray-200 dark:border-gray-700">
+													<td
+														class="px-6 py-4 whitespace-nowrap border-r border-gray-200 dark:border-gray-700"
+													>
 														<span
 															class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {level ===
 															'ERROR'
@@ -1534,16 +1555,25 @@
 															{level}
 														</span>
 													</td>
-													<td class="px-6 py-4 text-sm text-gray-900 dark:text-white max-w-md truncate border-r border-gray-200 dark:border-gray-700" title={message}>
+													<td
+														class="px-6 py-4 text-sm text-gray-900 dark:text-white max-w-md truncate border-r border-gray-200 dark:border-gray-700"
+														title={message}
+													>
 														{message}
 													</td>
-													<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">
+													<td
+														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700"
+													>
 														{duration ? `${duration}ms` : '-'}
 													</td>
-													<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700">
+													<td
+														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 border-r border-gray-200 dark:border-gray-700"
+													>
 														{tokens > 0 ? formatTokenUsage(tokens) : '-'}
 													</td>
-													<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+													<td
+														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
+													>
 														<button
 															on:click={() =>
 																(selectedEntry = selectedEntry === index ? null : index)}
