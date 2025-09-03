@@ -1221,8 +1221,6 @@
 </svelte:head>
 
 <div class="min-h-screen bg-gray-50 dark:bg-gray-900">
-	
-
 	<!-- Content -->
 	<div class="px-4 sm:px-6 py-6">
 		{#if loading}
@@ -1353,7 +1351,7 @@
 									<ArrowLeft className="w-4 h-4" />
 								</button>
 								<div class="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
-								
+
 								<!-- File Icon and Info -->
 								<div
 									class="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-lg flex items-center justify-center"
@@ -1373,8 +1371,12 @@
 									</svg>
 								</div>
 								<div>
-									<h1 class="text-lg font-medium text-gray-900 dark:text-white">Workflow Log Viewer</h1>
-									<div class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1">
+									<h1 class="text-lg font-medium text-gray-900 dark:text-white">
+										Workflow Log Viewer
+									</h1>
+									<div
+										class="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 mt-1"
+									>
 										<span class="font-medium">{filename}</span>
 										<span>•</span>
 										<span>{formatFileSize(logContent.size)}</span>
@@ -1393,10 +1395,20 @@
 							<div class="flex items-center gap-2">
 								<button
 									on:click={() => fetchLogContent(true)}
-									class="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+									class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200"
 									disabled={loading || isRetrying}
+									aria-label="Refresh log content"
+									title="Refresh log content"
 								>
-									{loading || isRetrying ? 'Refreshing...' : 'Refresh'}
+									{#if loading || isRetrying}
+										<svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+										</svg>
+									{:else}
+										<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+										</svg>
+									{/if}
 								</button>
 							</div>
 						</div>
@@ -1477,9 +1489,9 @@
 										<thead class="bg-gray-50 dark:bg-gray-800">
 											<tr>
 												<th
-													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700"
+													class="text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700"
 												>
-													Step
+													&nbsp;
 												</th>
 												<th
 													class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-r border-gray-200 dark:border-gray-700"
@@ -1577,48 +1589,104 @@
 														<button
 															on:click={() =>
 																(selectedEntry = selectedEntry === index ? null : index)}
-															class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
+															class="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+															title={selectedEntry === index ? 'Hide details' : 'Show details'}
 														>
-															{selectedEntry === index ? 'Hide' : 'Details'}
+															{#if selectedEntry === index}
+																<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																	<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+																</svg>
+																<span>Hide</span>
+															{:else}
+																<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																	<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+																</svg>
+																<span>Details</span>
+															{/if}
 														</button>
 													</td>
 												</tr>
 												{#if selectedEntry === index}
 													<tr>
-														<td colspan="7" class="px-6 py-4 bg-gray-50 dark:bg-gray-800">
-															<div class="space-y-3">
-																<div class="grid grid-cols-2 gap-4 text-sm">
-																	<div>
-																		<span class="font-medium text-gray-700 dark:text-gray-300"
-																			>Event Type:</span
-																		>
-																		<span class="ml-2 text-gray-600 dark:text-gray-400"
-																			>{eventType || 'N/A'}</span
-																		>
+														<td colspan="7" class="px-6 py-6 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
+															<div class="space-y-4">
+																<!-- Header with close button -->
+																<div class="flex items-center justify-between">
+																	<h4 class="text-sm font-semibold text-gray-900 dark:text-white">
+																		Log Entry Details - Step {index + 1}
+																	</h4>
+																	<button
+																		on:click={() => (selectedEntry = null)}
+																		class="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+																		title="Close details"
+																	>
+																		<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+																		</svg>
+																	</button>
+																</div>
+
+																<!-- Key Information Grid -->
+																<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+																	<div class="space-y-2">
+																		<div class="flex items-start gap-2">
+																			<span class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">Level:</span>
+																			<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium {level === 'ERROR' ? 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300' : level === 'WARNING' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-300' : level === 'SUCCESS' ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-300'}">
+																				{level}
+																			</span>
+																		</div>
+																		<div class="flex items-start gap-2">
+																			<span class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">Time:</span>
+																			<span class="text-gray-600 dark:text-gray-400 font-mono text-xs">
+																				{timestamp ? formatTimelineTimestamp(timestamp) : 'N/A'}
+																			</span>
+																		</div>
+																		{#if eventType}
+																			<div class="flex items-start gap-2">
+																				<span class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">Event:</span>
+																				<span class="text-gray-600 dark:text-gray-400">{eventType}</span>
+																			</div>
+																		{/if}
 																	</div>
-																	<div>
-																		<span class="font-medium text-gray-700 dark:text-gray-300"
-																			>Full Message:</span
-																		>
-																		<span class="ml-2 text-gray-600 dark:text-gray-400"
-																			>{message}</span
-																		>
+																	<div class="space-y-2">
+																		{#if duration}
+																			<div class="flex items-start gap-2">
+																				<span class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">Duration:</span>
+																				<span class="text-gray-600 dark:text-gray-400">{duration}ms</span>
+																			</div>
+																		{/if}
+																		{#if tokens > 0}
+																			<div class="flex items-start gap-2">
+																				<span class="font-medium text-gray-700 dark:text-gray-300 min-w-[80px]">Tokens:</span>
+																				<span class="text-gray-600 dark:text-gray-400">{formatTokenUsage(tokens)}</span>
+																			</div>
+																		{/if}
 																	</div>
 																</div>
-																{#if entry.data || entry.metadata || entry.errors}
-																	<div class="border-t border-gray-200 dark:border-gray-700 pt-3">
+
+																<!-- Full Message -->
+																<div class="border-t border-gray-200 dark:border-gray-700 pt-4">
+																	<div class="space-y-2">
+																		<span class="text-sm font-medium text-gray-700 dark:text-gray-300">Message:</span>
+																		<div class="p-3 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+																			<p class="text-sm text-gray-900 dark:text-white leading-relaxed">{message}</p>
+																		</div>
+																	</div>
+																</div>
+
+																<!-- Additional Data -->
+																{#if entry.data || entry.metadata || entry.errors || Object.keys(entry).length > 6}
+																	<div class="border-t border-gray-200 dark:border-gray-700 pt-4">
 																		<details class="text-sm">
-																			<summary
-																				class="cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-																			>
+																			<summary class="cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-2 font-medium">
+																				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+																				</svg>
 																				Show Raw Data
 																			</summary>
-																			<pre
-																				class="mt-2 p-3 bg-gray-100 dark:bg-gray-700 rounded text-xs overflow-auto max-h-48">{JSON.stringify(
-																					entry,
-																					null,
-																					2
-																				)}</pre>
+																			<div class="mt-3 p-4 bg-gray-100 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+																				<pre class="text-xs overflow-auto max-h-64 text-gray-900 dark:text-white font-mono leading-relaxed">{JSON.stringify(entry, null, 2)}</pre>
+																			</div>
 																		</details>
 																	</div>
 																{/if}
