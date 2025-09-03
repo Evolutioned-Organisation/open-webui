@@ -25,9 +25,6 @@
 	// Component imports
 	import ArrowLeft from '$lib/components/icons/ArrowLeft.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
-	import KeyValueTable from '$lib/components/admin/Aimbience/Components/KeyValueTable.svelte';
-	import type { KeyValuePair } from '$lib/components/admin/Aimbience/Components/KeyValueTable.svelte';
-	import CypherQuerySection from '$lib/components/admin/Aimbience/Components/CypherQuerySection.svelte';
 
 	// External library imports
 	import dayjs from 'dayjs';
@@ -221,98 +218,6 @@
 			return (tokens / 1000).toFixed(1) + 'K';
 		}
 		return tokens.toString();
-	}
-
-	// Helper function to extract key-value pairs from log entry
-	function extractKeyValuePairs(entry: any): KeyValuePair[] {
-		const pairs: KeyValuePair[] = [];
-
-		// Event Type
-		if (entry.event_type) {
-			pairs.push({
-				key: 'Event Type',
-				value: entry.event_type,
-				monospace: true
-			});
-		}
-
-		// Full Message
-		if (entry.message) {
-			pairs.push({
-				key: 'Full Message',
-				value: entry.message
-			});
-		}
-
-		// Duration
-		if (entry.duration) {
-			pairs.push({
-				key: 'Duration',
-				value: entry.duration,
-				formatted: true
-			});
-		}
-
-		// Token Usage
-		if (entry.tokens && entry.tokens > 0) {
-			pairs.push({
-				key: 'Token Usage',
-				value: entry.tokens,
-				formatted: true
-			});
-		}
-
-		// Level
-		if (entry.level) {
-			pairs.push({
-				key: 'Level',
-				value: entry.level,
-				badge: true,
-				badgeColor: entry.level === 'ERROR' ? 'red' : 
-						   entry.level === 'WARNING' ? 'yellow' : 
-						   entry.level === 'SUCCESS' ? 'green' : 'blue'
-			});
-		}
-
-		// Timestamp
-		if (entry.timestamp) {
-			pairs.push({
-				key: 'Timestamp',
-				value: entry.timestamp,
-				formatted: true,
-				monospace: true
-			});
-		}
-
-		// Query Type
-		if (entry.query_type) {
-			pairs.push({
-				key: 'Query Type',
-				value: entry.query_type,
-				badge: true,
-				badgeColor: 'purple'
-			});
-		}
-
-		// Chat ID
-		if (entry.chat_id) {
-			pairs.push({
-				key: 'Chat ID',
-				value: entry.chat_id,
-				monospace: true
-			});
-		}
-
-		// Workflow ID
-		if (entry.workflow_id) {
-			pairs.push({
-				key: 'Workflow ID',
-				value: entry.workflow_id,
-				monospace: true
-			});
-		}
-
-		return pairs;
 	}
 
 	function goBack() {
@@ -730,7 +635,18 @@
 		}
 	}
 
+	// Cypher Query Detection and Formatting
+	function isCypherQuery(entry: any): boolean {
+		if (!entry) return false;
 
+		// Check for entity_discovery query type
+		if (entry.query_type === 'entity_discovery') return true;
+
+		// Check for Cypher-related keywords in message
+		const message = entry.message || entry.msg || '';
+		const cypherKeywords = ['cypher', 'neo4j', 'entity_discovery', 'MATCH', 'RETURN', 'WHERE'];
+		return cypherKeywords.some((keyword) => message.toLowerCase().includes(keyword.toLowerCase()));
+	}
 
 	function extractCypherQuery(entry: any): string | null {
 		if (!entry) return null;
@@ -1885,29 +1801,208 @@
 																	</button>
 																</div>
 
-																<!-- Key-Value Table Component -->
-																<KeyValueTable data={extractKeyValuePairs(entry)} />
-
-																<!-- Cypher Query Section -->
-																<CypherQuerySection {entry} />
-
-																<!-- Additional Data Section -->
-																{#if entry.data || entry.metadata || entry.errors}
-																	<div
-																		class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
-																	>
+																<!-- Enhanced content grid -->
+																<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+																	<div class="space-y-3">
 																		<div
-																			class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2"
+																			class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
 																		>
-																			Additional Data
+																			<div
+																				class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1"
+																			>
+																				Event Type
+																			</div>
+																			<div class="text-sm text-gray-900 dark:text-white font-mono">
+																				{eventType || 'N/A'}
+																			</div>
 																		</div>
-																		<div class="space-y-2">
-																			{#if entry.data}
-																				<div>
+
+																		<div
+																			class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+																		>
+																			<div
+																				class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1"
+																			>
+																				Duration
+																			</div>
+																			<div class="text-sm text-gray-900 dark:text-white">
+																				{duration ? `${duration}ms` : 'N/A'}
+																			</div>
+																		</div>
+
+																		{#if tokens > 0}
+																			<div
+																				class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+																			>
+																				<div
+																					class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1"
+																				>
+																					Token Usage
+																				</div>
+																				<div class="text-sm text-gray-900 dark:text-white">
+																					{formatTokenUsage(tokens)} tokens
+																				</div>
+																			</div>
+																		{/if}
+																	</div>
+
+																	<div class="space-y-3">
+																		<div
+																			class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+																		>
+																			<div
+																				class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1"
+																			>
+																				Full Message
+																			</div>
+																			<div
+																				class="text-sm text-gray-900 dark:text-white leading-relaxed"
+																			>
+																				{message}
+																			</div>
+																		</div>
+
+																		<!-- Cypher Query Section -->
+																		{#if isCypherQuery(entry)}
+																			{@const cypherQuery = extractCypherQuery(entry)}
+																			{@const cypherResults = extractCypherResults(entry)}
+																			<div class="space-y-3">
+																				<!-- Debug Section (temporary) -->
+																				<div
+																					class="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-700"
+																				>
 																					<div
-																						class="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1"
+																						class="text-xs font-medium text-yellow-700 dark:text-yellow-300 mb-2"
 																					>
-																						Data:
+																						Debug Info:
+																					</div>
+																					<div
+																						class="text-xs text-yellow-600 dark:text-yellow-400 space-y-1"
+																					>
+																						<div>Query found: {cypherQuery ? 'Yes' : 'No'}</div>
+																						<div>
+																							Results found: {cypherResults
+																								? `Yes (${cypherResults.length})`
+																								: 'No'}
+																						</div>
+																						<div>Entry keys: {Object.keys(entry).join(', ')}</div>
+																						{#if entry.data}
+																							<div>
+																								Data keys: {Object.keys(entry.data).join(', ')}
+																							</div>
+																						{/if}
+																					</div>
+																				</div>
+
+																				{#if cypherQuery}
+																					<div
+																						class="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700"
+																					>
+																						<div class="flex items-center gap-2 mb-3">
+																							<svg
+																								class="w-5 h-5 text-purple-600 dark:text-purple-400"
+																								fill="none"
+																								stroke="currentColor"
+																								viewBox="0 0 24 24"
+																							>
+																								<path
+																									stroke-linecap="round"
+																									stroke-linejoin="round"
+																									stroke-width="2"
+																									d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+																								/>
+																							</svg>
+																							<h4
+																								class="text-sm font-semibold text-purple-700 dark:text-purple-300"
+																							>
+																								Cypher Query
+																							</h4>
+																							{#if entry.query_type}
+																								<span
+																									class="px-2 py-1 bg-purple-100 dark:bg-purple-800/50 text-purple-700 dark:text-purple-300 rounded text-xs font-medium"
+																								>
+																									{entry.query_type}
+																								</span>
+																							{/if}
+																						</div>
+																						<pre
+																							class="text-sm bg-white dark:bg-gray-800 p-3 rounded border overflow-auto max-h-32 text-gray-800 dark:text-gray-200 font-mono leading-relaxed">{formatCypherQuery(
+																								cypherQuery
+																							)}</pre>
+																					</div>
+																				{:else}
+																					<div
+																						class="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+																					>
+																						<div class="text-sm text-gray-600 dark:text-gray-400">
+																							No Cypher query found in this entry
+																						</div>
+																					</div>
+																				{/if}
+
+																				{#if cypherResults}
+																					<div
+																						class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-4 border border-green-200 dark:border-green-700"
+																					>
+																						<div class="flex items-center gap-2 mb-3">
+																							<svg
+																								class="w-5 h-5 text-green-600 dark:text-green-400"
+																								fill="none"
+																								stroke="currentColor"
+																								viewBox="0 0 24 24"
+																							>
+																								<path
+																									stroke-linecap="round"
+																									stroke-linejoin="round"
+																									stroke-width="2"
+																									d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+																								/>
+																							</svg>
+																							<h4
+																								class="text-sm font-semibold text-green-700 dark:text-green-300"
+																							>
+																								Query Results
+																							</h4>
+																							<span
+																								class="px-2 py-1 bg-green-100 dark:bg-green-800/50 text-green-700 dark:text-green-300 rounded text-xs font-medium"
+																							>
+																								{cypherResults.length} result{cypherResults.length !==
+																								1
+																									? 's'
+																									: ''}
+																							</span>
+																						</div>
+																						<pre
+																							class="text-sm bg-white dark:bg-gray-800 p-3 rounded border overflow-auto max-h-48 text-gray-800 dark:text-gray-200 font-mono leading-relaxed">{formatCypherResults(
+																								cypherResults
+																							)}</pre>
+																					</div>
+																				{:else}
+																					<div
+																						class="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+																					>
+																						<div class="text-sm text-gray-600 dark:text-gray-400">
+																							No query results found in this entry
+																						</div>
+																					</div>
+																				{/if}
+																			</div>
+																		{:else if entry.data || entry.metadata || entry.errors}
+																			<div
+																				class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+																			>
+																				<div
+																					class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2"
+																				>
+																					Additional Data
+																				</div>
+																				<div class="space-y-2">
+																					{#if entry.data}
+																						<div>
+																							<div
+																								class="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1"
+																							>
+																								Data:
 																							</div>
 																							<pre
 																								class="text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded border overflow-auto max-h-24 text-gray-700 dark:text-gray-300">{JSON.stringify(
@@ -1955,7 +2050,7 @@
 
 																<!-- Raw data toggle -->
 																<div class="border-t border-gray-200 dark:border-gray-700 pt-3">
-																	<details class="text-sm" open>
+																	<details class="text-sm">
 																		<summary
 																			class="cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium flex items-center gap-2"
 																		>
