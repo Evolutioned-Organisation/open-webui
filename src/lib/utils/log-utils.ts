@@ -1,6 +1,6 @@
 /**
  * Log Viewer Utility Functions
- * 
+ *
  * This file contains all the helper functions for processing and formatting log data.
  * These functions are used across multiple log viewer components.
  */
@@ -254,7 +254,7 @@ export function isValidJSON(content: any): boolean {
  */
 export function countEntities(content: any): number {
 	if (!content || !Array.isArray(content)) return 0;
-	
+
 	let count = 0;
 	content.forEach((entry) => {
 		if (entry.entities) {
@@ -272,7 +272,7 @@ export function countEntities(content: any): number {
  */
 export function countCypherQueries(content: any): number {
 	if (!content || !Array.isArray(content)) return 0;
-	
+
 	return content.filter((entry) => isCypherQuery(entry)).length;
 }
 
@@ -398,9 +398,14 @@ export function extractKeyValuePairs(entry: LogEntry): Array<{
 			key: 'Level',
 			value: entry.level,
 			badge: true,
-			badgeColor: entry.level === 'ERROR' ? 'red' : 
-					   entry.level === 'WARNING' ? 'yellow' : 
-					   entry.level === 'SUCCESS' ? 'green' : 'blue'
+			badgeColor:
+				entry.level === 'ERROR'
+					? 'red'
+					: entry.level === 'WARNING'
+						? 'yellow'
+						: entry.level === 'SUCCESS'
+							? 'green'
+							: 'blue'
 		});
 	}
 

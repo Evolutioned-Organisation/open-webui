@@ -13,31 +13,37 @@
 		if (data === undefined) return 'undefined';
 		if (typeof data === 'string') return `"${data}"`;
 		if (typeof data === 'number' || typeof data === 'boolean') return String(data);
-		
+
 		if (Array.isArray(data)) {
 			if (data.length === 0) return '[]';
-			const items = data.map((item, index) => 
-				`${'  '.repeat(depth + 1)}[${index}]: ${renderJsonTree(item, depth + 1)}`
-			).join('\n');
+			const items = data
+				.map(
+					(item, index) => `${'  '.repeat(depth + 1)}[${index}]: ${renderJsonTree(item, depth + 1)}`
+				)
+				.join('\n');
 			return `[\n${items}\n${'  '.repeat(depth)}]`;
 		}
-		
+
 		if (typeof data === 'object') {
 			const keys = Object.keys(data);
 			if (keys.length === 0) return '{}';
-			const items = keys.map(key => 
-				`${'  '.repeat(depth + 1)}"${key}": ${renderJsonTree(data[key], depth + 1)}`
-			).join(',\n');
+			const items = keys
+				.map((key) => `${'  '.repeat(depth + 1)}"${key}": ${renderJsonTree(data[key], depth + 1)}`)
+				.join(',\n');
 			return `{\n${items}\n${'  '.repeat(depth)}}`;
 		}
-		
+
 		return String(data);
 	}
 </script>
 
 {#if isValid}
-	<div class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-		<div class="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+	<div
+		class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+	>
+		<div
+			class="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700"
+		>
 			<div class="flex items-center gap-2">
 				<svg
 					class="w-4 h-4 text-gray-600 dark:text-gray-400"
@@ -56,7 +62,10 @@
 			</div>
 		</div>
 		<div class="p-4">
-			<pre class="text-sm text-gray-800 dark:text-gray-200 font-mono leading-relaxed overflow-auto max-h-96">{renderJsonTree(logContent)}</pre>
+			<pre
+				class="text-sm text-gray-800 dark:text-gray-200 font-mono leading-relaxed overflow-auto max-h-96">{renderJsonTree(
+					logContent
+				)}</pre>
 		</div>
 	</div>
 {:else}

@@ -1,6 +1,6 @@
 /**
  * Tests for log-utils.ts
- * 
+ *
  * This file contains comprehensive tests for all utility functions
  * used in the log viewer components.
  */
@@ -77,22 +77,22 @@ describe('log-utils', () => {
 		});
 
 		it('should detect Cypher keywords in message', () => {
-			const entry: LogEntry = { 
-				message: 'MATCH (n:Person) RETURN n.name WHERE n.age > 25' 
+			const entry: LogEntry = {
+				message: 'MATCH (n:Person) RETURN n.name WHERE n.age > 25'
 			};
 			expect(isCypherQuery(entry)).toBe(true);
 		});
 
 		it('should detect Cypher patterns', () => {
-			const entry: LogEntry = { 
-				message: 'MATCH (n:Person)-[r:KNOWS]->(m:Person) RETURN n, r, m' 
+			const entry: LogEntry = {
+				message: 'MATCH (n:Person)-[r:KNOWS]->(m:Person) RETURN n, r, m'
 			};
 			expect(isCypherQuery(entry)).toBe(true);
 		});
 
 		it('should reject non-Cypher content', () => {
-			const entry: LogEntry = { 
-				message: 'This is just a regular log message' 
+			const entry: LogEntry = {
+				message: 'This is just a regular log message'
 			};
 			expect(isCypherQuery(entry)).toBe(false);
 		});
@@ -105,7 +105,7 @@ describe('log-utils', () => {
 
 	describe('extractCypherQuery', () => {
 		it('should extract query from various fields', () => {
-			const entry: LogEntry = { 
+			const entry: LogEntry = {
 				cypher_query: 'MATCH (n) RETURN n',
 				query: 'SELECT * FROM users',
 				message: 'MATCH (n:Person) RETURN n'
@@ -114,15 +114,15 @@ describe('log-utils', () => {
 		});
 
 		it('should extract from nested data object', () => {
-			const entry: LogEntry = { 
+			const entry: LogEntry = {
 				data: { cypher_query: 'MATCH (n) RETURN n' }
 			};
 			expect(extractCypherQuery(entry)).toBe('MATCH (n) RETURN n');
 		});
 
 		it('should return null for non-Cypher content', () => {
-			const entry: LogEntry = { 
-				message: 'This is not a Cypher query' 
+			const entry: LogEntry = {
+				message: 'This is not a Cypher query'
 			};
 			expect(extractCypherQuery(entry)).toBe(null);
 		});
@@ -131,7 +131,7 @@ describe('log-utils', () => {
 	describe('extractCypherResults', () => {
 		it('should extract results from various fields', () => {
 			const results = [{ name: 'John' }, { name: 'Jane' }];
-			const entry: LogEntry = { 
+			const entry: LogEntry = {
 				results,
 				cypher_results: [{ name: 'Bob' }],
 				records: [{ name: 'Alice' }]
@@ -141,7 +141,7 @@ describe('log-utils', () => {
 
 		it('should extract from nested data object', () => {
 			const results = [{ name: 'John' }];
-			const entry: LogEntry = { 
+			const entry: LogEntry = {
 				data: { results }
 			};
 			expect(extractCypherResults(entry)).toEqual(results);
@@ -177,12 +177,7 @@ describe('log-utils', () => {
 		});
 
 		it('should format multiple results with summary', () => {
-			const results = [
-				{ name: 'John' },
-				{ name: 'Jane' },
-				{ name: 'Bob' },
-				{ name: 'Alice' }
-			];
+			const results = [{ name: 'John' }, { name: 'Jane' }, { name: 'Bob' }, { name: 'Alice' }];
 			const formatted = formatCypherResults(results);
 			expect(formatted).toContain('Found 4 results');
 			expect(formatted).toContain('... and 1 more results');
@@ -333,15 +328,21 @@ describe('log-utils', () => {
 
 		describe('sanitizeDisplayContent', () => {
 			it('should sanitize display content', () => {
-				expect(sanitizeDisplayContent('<script>alert("xss")</script>')).toBe('scriptalert("xss")/script');
+				expect(sanitizeDisplayContent('<script>alert("xss")</script>')).toBe(
+					'scriptalert("xss")/script'
+				);
 				expect(sanitizeDisplayContent('normal text')).toBe('normal text');
 			});
 		});
 
 		describe('createSafeErrorMessage', () => {
 			it('should create safe error messages', () => {
-				expect(createSafeErrorMessage('Error: <script>alert("xss")</script>')).toBe('Error: scriptalert("xss")/script');
-				expect(createSafeErrorMessage({ message: 'Error: <script>alert("xss")</script>' })).toBe('Error: scriptalert("xss")/script');
+				expect(createSafeErrorMessage('Error: <script>alert("xss")</script>')).toBe(
+					'Error: scriptalert("xss")/script'
+				);
+				expect(createSafeErrorMessage({ message: 'Error: <script>alert("xss")</script>' })).toBe(
+					'Error: scriptalert("xss")/script'
+				);
 				expect(createSafeErrorMessage(null)).toBe('An unknown error occurred');
 			});
 		});

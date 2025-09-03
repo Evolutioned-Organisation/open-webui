@@ -6,7 +6,9 @@
 	$: rawContent = typeof logContent === 'string' ? logContent : JSON.stringify(logContent, null, 2);
 </script>
 
-<div class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+<div
+	class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+>
 	<div class="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
 		<div class="flex items-center gap-2">
 			<svg
@@ -26,6 +28,7 @@
 		</div>
 	</div>
 	<div class="p-4">
-		<pre class="text-sm text-gray-800 dark:text-gray-200 font-mono leading-relaxed overflow-auto max-h-96 whitespace-pre-wrap">{rawContent}</pre>
+		<pre
+			class="text-sm text-gray-800 dark:text-gray-200 font-mono leading-relaxed overflow-auto max-h-96 whitespace-pre-wrap">{rawContent}</pre>
 	</div>
 </div>

@@ -50,7 +50,10 @@
 				<!-- File information -->
 				<div class="flex items-center space-x-6">
 					<div>
-						<h1 class="text-lg font-semibold text-gray-900 dark:text-white truncate max-w-md" title={filename}>
+						<h1
+							class="text-lg font-semibold text-gray-900 dark:text-white truncate max-w-md"
+							title={filename}
+						>
 							{filename || 'Unknown File'}
 						</h1>
 						<div class="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
@@ -96,7 +99,9 @@
 
 				<!-- Error indicator -->
 				{#if error}
-					<div class="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg">
+					<div
+						class="flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg"
+					>
 						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 							<path
 								stroke-linecap="round"

@@ -17,7 +17,9 @@
 
 <div class="space-y-3">
 	<!-- Debug Section (temporary) -->
-	<div class="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-700">
+	<div
+		class="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-700"
+	>
 		<div class="text-xs font-medium text-yellow-700 dark:text-yellow-300 mb-2">Debug Info:</div>
 		<div class="text-xs text-yellow-600 dark:text-yellow-400 space-y-1">
 			<div>Query found: {cypherQuery ? 'Yes' : 'No'}</div>
@@ -63,7 +65,9 @@
 			</pre>
 		</div>
 	{:else}
-		<div class="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+		<div
+			class="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+		>
 			<div class="text-sm text-gray-600 dark:text-gray-400">
 				No Cypher query found in this entry
 			</div>
@@ -102,7 +106,9 @@
 			</pre>
 		</div>
 	{:else}
-		<div class="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700">
+		<div
+			class="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+		>
 			<div class="text-sm text-gray-600 dark:text-gray-400">
 				No query results found in this entry
 			</div>

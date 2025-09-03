@@ -43,21 +43,14 @@
 					d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
 				/>
 			</svg>
-			<h4 class="text-sm font-semibold text-gray-900 dark:text-white">
-				Log Entry Details
-			</h4>
+			<h4 class="text-sm font-semibold text-gray-900 dark:text-white">Log Entry Details</h4>
 		</div>
 		<button
 			on:click={handleClose}
 			class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
 			aria-label="Close details"
 		>
-			<svg
-				class="w-4 h-4"
-				fill="none"
-				stroke="currentColor"
-				viewBox="0 0 24 24"
-			>
+			<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path
 					stroke-linecap="round"
 					stroke-linejoin="round"
@@ -88,12 +81,7 @@
 			<summary
 				class="cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium flex items-center gap-2"
 			>
-				<svg
-					class="w-4 h-4"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 					<path
 						stroke-linecap="round"
 						stroke-linejoin="round"

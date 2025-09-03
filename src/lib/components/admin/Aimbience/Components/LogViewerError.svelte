@@ -16,7 +16,8 @@
 	// Computed values
 	$: safeErrorMessage = createSafeErrorMessage(errorMessage);
 	$: isNotFoundError = errorMessage.toLowerCase().includes('not found');
-	$: isNetworkError = errorMessage.toLowerCase().includes('network') || errorMessage.toLowerCase().includes('fetch');
+	$: isNetworkError =
+		errorMessage.toLowerCase().includes('network') || errorMessage.toLowerCase().includes('fetch');
 
 	// Event handlers
 	function handleRetry() {
@@ -32,8 +33,15 @@
 	<div class="max-w-md w-full">
 		<div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
 			<!-- Error Icon -->
-			<div class="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 dark:bg-red-900/20 rounded-full">
-				<svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+			<div
+				class="flex items-center justify-center w-12 h-12 mx-auto mb-4 bg-red-100 dark:bg-red-900/20 rounded-full"
+			>
+				<svg
+					class="w-6 h-6 text-red-600 dark:text-red-400"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
 					<path
 						stroke-linecap="round"
 						stroke-linejoin="round"
@@ -57,14 +65,21 @@
 			<!-- Error Message -->
 			<div class="text-sm text-gray-600 dark:text-gray-400 text-center mb-6">
 				{#if isNotFoundError}
-					<p class="mb-2">The log file <code class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-mono">{filename}</code> could not be found.</p>
+					<p class="mb-2">
+						The log file <code
+							class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-mono"
+							>{filename}</code
+						> could not be found.
+					</p>
 					<p>It may have been deleted or moved.</p>
 				{:else if isNetworkError}
 					<p class="mb-2">Unable to connect to the server.</p>
 					<p>Please check your internet connection and try again.</p>
 				{:else}
 					<p class="mb-2">An error occurred while loading the log file:</p>
-					<code class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-mono block text-left mt-2">
+					<code
+						class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs font-mono block text-left mt-2"
+					>
 						{safeErrorMessage}
 					</code>
 				{/if}
@@ -111,9 +126,16 @@
 
 				<!-- Additional Help for Not Found Errors -->
 				{#if isNotFoundError}
-					<div class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-700">
+					<div
+						class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-700"
+					>
 						<div class="flex items-start gap-2">
-							<svg class="w-4 h-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<svg
+								class="w-4 h-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
 								<path
 									stroke-linecap="round"
 									stroke-linejoin="round"
