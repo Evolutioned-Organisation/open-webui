@@ -1095,6 +1095,14 @@
 		}
 	}
 
+	function renderEnhancedJsonTree(data: any): string {
+		if (!data) {
+			return '<div class="text-gray-500 dark:text-gray-400 text-center py-8">No data available</div>';
+		}
+
+		return renderJsonTree(data, 0);
+	}
+
 	function renderJsonTree(data: any, level: number = 0): string {
 		if (data === null) {
 			return '<span class="text-gray-500 dark:text-gray-400 italic">null</span>';
@@ -1477,7 +1485,7 @@
 										<tbody
 											class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700"
 										>
-											{#each logContent.content as item, index}
+											{#each Array.isArray(logContent.content) ? logContent.content : [] as item, index}
 												{@const entry = typeof item === 'string' ? JSON.parse(item) : item}
 												{@const timestamp =
 													entry.timestamp || entry.time || entry.created_at || entry.ts}
@@ -1771,24 +1779,108 @@
 									</table>
 								</div>
 							{:else if isValidJSON(logContent.content) && viewMode === 'tree'}
-								<!-- Compact Tree View -->
-								<div class="overflow-auto max-h-[40rem]">
-									{@html renderEnhancedJsonTree(logContent.content)}
+								<!-- Enhanced Tree View -->
+								<div
+									class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+								>
+									<div
+										class="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700"
+									>
+										<div class="flex items-center gap-2">
+											<svg
+												class="w-4 h-4 text-gray-600 dark:text-gray-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"
+												/>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M8 5a2 2 0 012-2h4a2 2 0 012 2v2H8V5z"
+												/>
+											</svg>
+											<span class="text-sm font-medium text-gray-700 dark:text-gray-300"
+												>JSON Tree View</span
+											>
+										</div>
+									</div>
+									<div class="overflow-auto max-h-[40rem] p-4">
+										{@html renderEnhancedJsonTree(logContent.content)}
+									</div>
 								</div>
 							{:else if isValidJSON(logContent.content) && viewMode === 'raw'}
-								<!-- Raw JSON -->
-								<pre
-									class="text-sm overflow-auto max-h-[40rem] text-gray-900 dark:text-white font-mono leading-relaxed bg-gray-50 dark:bg-gray-800 p-4 rounded border"
-									style="white-space: pre-wrap; word-wrap: break-word;">
-									{formatContent(logContent.content)}
-								</pre>
+								<!-- Enhanced Raw JSON View -->
+								<div
+									class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+								>
+									<div
+										class="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700"
+									>
+										<div class="flex items-center gap-2">
+											<svg
+												class="w-4 h-4 text-gray-600 dark:text-gray-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+												/>
+											</svg>
+											<span class="text-sm font-medium text-gray-700 dark:text-gray-300"
+												>Raw JSON Data</span
+											>
+										</div>
+									</div>
+									<pre
+										class="text-sm overflow-auto max-h-[40rem] text-gray-900 dark:text-white font-mono leading-relaxed p-4"
+										style="white-space: pre-wrap; word-wrap: break-word;">
+										{formatContent(logContent.content)}
+									</pre>
+								</div>
 							{:else}
-								<!-- Plain text content -->
-								<pre
-									class="text-sm overflow-auto max-h-[40rem] text-gray-900 dark:text-white font-mono leading-relaxed bg-gray-50 dark:bg-gray-800 p-4 rounded border"
-									style="white-space: pre-wrap; word-wrap: break-word;">
-									{formatContent(logContent.content)}
-								</pre>
+								<!-- Enhanced Plain Text Content -->
+								<div
+									class="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+								>
+									<div
+										class="bg-gray-100 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700"
+									>
+										<div class="flex items-center gap-2">
+											<svg
+												class="w-4 h-4 text-gray-600 dark:text-gray-400"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													stroke-width="2"
+													d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+												/>
+											</svg>
+											<span class="text-sm font-medium text-gray-700 dark:text-gray-300"
+												>Plain Text Content</span
+											>
+										</div>
+									</div>
+									<pre
+										class="text-sm overflow-auto max-h-[40rem] text-gray-900 dark:text-white font-mono leading-relaxed p-4"
+										style="white-space: pre-wrap; word-wrap: break-word;">
+										{formatContent(logContent.content)}
+									</pre>
+								</div>
 							{/if}
 						{:else}
 							<div class="text-center py-12 text-gray-500 dark:text-gray-400">
