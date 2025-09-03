@@ -25,6 +25,9 @@
 	// Component imports
 	import ArrowLeft from '$lib/components/icons/ArrowLeft.svelte';
 	import Spinner from '$lib/components/common/Spinner.svelte';
+	import KeyValueTable from '$lib/components/admin/Aimbience/Components/KeyValueTable.svelte';
+	import type { KeyValuePair } from '$lib/components/admin/Aimbience/Components/KeyValueTable.svelte';
+	import CypherQuerySection from '$lib/components/admin/Aimbience/Components/CypherQuerySection.svelte';
 
 	// External library imports
 	import dayjs from 'dayjs';
@@ -218,6 +221,98 @@
 			return (tokens / 1000).toFixed(1) + 'K';
 		}
 		return tokens.toString();
+	}
+
+	// Helper function to extract key-value pairs from log entry
+	function extractKeyValuePairs(entry: any): KeyValuePair[] {
+		const pairs: KeyValuePair[] = [];
+
+		// Event Type
+		if (entry.event_type) {
+			pairs.push({
+				key: 'Event Type',
+				value: entry.event_type,
+				monospace: true
+			});
+		}
+
+		// Full Message
+		if (entry.message) {
+			pairs.push({
+				key: 'Full Message',
+				value: entry.message
+			});
+		}
+
+		// Duration
+		if (entry.duration) {
+			pairs.push({
+				key: 'Duration',
+				value: entry.duration,
+				formatted: true
+			});
+		}
+
+		// Token Usage
+		if (entry.tokens && entry.tokens > 0) {
+			pairs.push({
+				key: 'Token Usage',
+				value: entry.tokens,
+				formatted: true
+			});
+		}
+
+		// Level
+		if (entry.level) {
+			pairs.push({
+				key: 'Level',
+				value: entry.level,
+				badge: true,
+				badgeColor: entry.level === 'ERROR' ? 'red' : 
+						   entry.level === 'WARNING' ? 'yellow' : 
+						   entry.level === 'SUCCESS' ? 'green' : 'blue'
+			});
+		}
+
+		// Timestamp
+		if (entry.timestamp) {
+			pairs.push({
+				key: 'Timestamp',
+				value: entry.timestamp,
+				formatted: true,
+				monospace: true
+			});
+		}
+
+		// Query Type
+		if (entry.query_type) {
+			pairs.push({
+				key: 'Query Type',
+				value: entry.query_type,
+				badge: true,
+				badgeColor: 'purple'
+			});
+		}
+
+		// Chat ID
+		if (entry.chat_id) {
+			pairs.push({
+				key: 'Chat ID',
+				value: entry.chat_id,
+				monospace: true
+			});
+		}
+
+		// Workflow ID
+		if (entry.workflow_id) {
+			pairs.push({
+				key: 'Workflow ID',
+				value: entry.workflow_id,
+				monospace: true
+			});
+		}
+
+		return pairs;
 	}
 
 	function goBack() {
@@ -632,6 +727,159 @@
 			return findings.length > 0 ? `${findings.length} findings` : 'None found';
 		} catch {
 			return 'None found';
+		}
+	}
+
+
+
+	function extractCypherQuery(entry: any): string | null {
+		if (!entry) return null;
+
+		// Look for cypher query in various fields
+		const cypherQuery = entry.cypher_query || entry.query || entry.cypher || entry.sql;
+		if (cypherQuery && typeof cypherQuery === 'string') {
+			return cypherQuery;
+		}
+
+		// Look in data field
+		if (entry.data && typeof entry.data === 'object') {
+			const dataQuery =
+				entry.data.cypher_query || entry.data.query || entry.data.cypher || entry.data.sql;
+			if (dataQuery && typeof dataQuery === 'string') {
+				return dataQuery;
+			}
+		}
+
+		// Look in message for query patterns
+		const message = entry.message || entry.msg || '';
+		const queryMatch = message.match(/(MATCH\s+.*?)(?:\n|$)/i);
+		if (queryMatch) {
+			return queryMatch[1];
+		}
+
+		// Look for any field that might contain a query
+		for (const [key, value] of Object.entries(entry)) {
+			if (
+				typeof value === 'string' &&
+				(value.includes('MATCH') ||
+					value.includes('RETURN') ||
+					value.includes('WHERE') ||
+					key.toLowerCase().includes('query') ||
+					key.toLowerCase().includes('cypher'))
+			) {
+				return value;
+			}
+		}
+
+		// Look in nested data structures
+		if (entry.data && typeof entry.data === 'object') {
+			for (const [key, value] of Object.entries(entry.data)) {
+				if (
+					typeof value === 'string' &&
+					(value.includes('MATCH') ||
+						value.includes('RETURN') ||
+						value.includes('WHERE') ||
+						key.toLowerCase().includes('query') ||
+						key.toLowerCase().includes('cypher'))
+				) {
+					return value;
+				}
+			}
+		}
+
+		return null;
+	}
+
+	function extractCypherResults(entry: any): any[] | null {
+		if (!entry) return null;
+
+		// Look for results in various fields
+		const results = entry.results || entry.data?.results || entry.output || entry.data?.output;
+		if (Array.isArray(results)) {
+			return results;
+		}
+
+		// Look for entities or nodes
+		const entities = entry.entities || entry.data?.entities || entry.nodes || entry.data?.nodes;
+		if (Array.isArray(entities)) {
+			return entities;
+		}
+
+		// Look for relationships
+		const relationships = entry.relationships || entry.data?.relationships;
+		if (Array.isArray(relationships)) {
+			return relationships;
+		}
+
+		// Look for any array field that might contain results
+		for (const [key, value] of Object.entries(entry)) {
+			if (Array.isArray(value) && value.length > 0) {
+				// Check if it looks like query results
+				if (
+					key.toLowerCase().includes('result') ||
+					key.toLowerCase().includes('data') ||
+					key.toLowerCase().includes('response') ||
+					key.toLowerCase().includes('output')
+				) {
+					return value;
+				}
+			}
+		}
+
+		// Look in nested data structures
+		if (entry.data && typeof entry.data === 'object') {
+			for (const [key, value] of Object.entries(entry.data)) {
+				if (Array.isArray(value) && value.length > 0) {
+					// Check if it looks like query results
+					if (
+						key.toLowerCase().includes('result') ||
+						key.toLowerCase().includes('data') ||
+						key.toLowerCase().includes('response') ||
+						key.toLowerCase().includes('output') ||
+						key.toLowerCase().includes('entity') ||
+						key.toLowerCase().includes('node')
+					) {
+						return value;
+					}
+				}
+			}
+		}
+
+		return null;
+	}
+
+	function formatCypherQuery(query: string): string {
+		if (!query) return '';
+
+		// Basic Cypher formatting
+		return query
+			.replace(/\bMATCH\b/gi, '\nMATCH')
+			.replace(/\bWHERE\b/gi, '\nWHERE')
+			.replace(/\bRETURN\b/gi, '\nRETURN')
+			.replace(/\bWITH\b/gi, '\nWITH')
+			.replace(/\bORDER BY\b/gi, '\nORDER BY')
+			.replace(/\bLIMIT\b/gi, '\nLIMIT')
+			.trim();
+	}
+
+	function formatCypherResults(results: any[]): string {
+		if (!results || results.length === 0) return 'No results found';
+
+		try {
+			// Format results as a readable table-like structure
+			if (results.length === 1) {
+				return JSON.stringify(results[0], null, 2);
+			}
+
+			// For multiple results, show a summary
+			return `Found ${results.length} results:\n\n${results
+				.slice(0, 3)
+				.map((result, index) => `Result ${index + 1}:\n${JSON.stringify(result, null, 2)}`)
+				.join(
+					'\n\n'
+				)}${results.length > 3 ? `\n\n... and ${results.length - 3} more results` : ''}`;
+		} catch {
+			return JSON.stringify(results, null, 2);
 		}
 	}
 
@@ -1558,7 +1806,25 @@
 														class="px-6 py-4 text-sm text-gray-900 dark:text-white max-w-md truncate"
 														title={message}
 													>
-														{message}
+														<div class="flex items-center gap-2">
+															<span class="truncate">{message}</span>
+															{#if isCypherQuery(entry)}
+																<svg
+																	class="w-4 h-4 text-purple-600 dark:text-purple-400 flex-shrink-0"
+																	fill="none"
+																	stroke="currentColor"
+																	viewBox="0 0 24 24"
+																	title="Contains Cypher Query"
+																>
+																	<path
+																		stroke-linecap="round"
+																		stroke-linejoin="round"
+																		stroke-width="2"
+																		d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+																	/>
+																</svg>
+															{/if}
+														</div>
 													</td>
 													<td
 														class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400"
@@ -1619,83 +1885,29 @@
 																	</button>
 																</div>
 
-																<!-- Enhanced content grid -->
-																<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-																	<div class="space-y-3">
+																<!-- Key-Value Table Component -->
+																<KeyValueTable data={extractKeyValuePairs(entry)} />
+
+																<!-- Cypher Query Section -->
+																<CypherQuerySection {entry} />
+
+																<!-- Additional Data Section -->
+																{#if entry.data || entry.metadata || entry.errors}
+																	<div
+																		class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+																	>
 																		<div
-																			class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
+																			class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2"
 																		>
-																			<div
-																				class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1"
-																			>
-																				Event Type
-																			</div>
-																			<div class="text-sm text-gray-900 dark:text-white font-mono">
-																				{eventType || 'N/A'}
-																			</div>
+																			Additional Data
 																		</div>
-
-																		<div
-																			class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
-																		>
-																			<div
-																				class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1"
-																			>
-																				Duration
-																			</div>
-																			<div class="text-sm text-gray-900 dark:text-white">
-																				{duration ? `${duration}ms` : 'N/A'}
-																			</div>
-																		</div>
-
-																		{#if tokens > 0}
-																			<div
-																				class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
-																			>
-																				<div
-																					class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1"
-																				>
-																					Token Usage
-																				</div>
-																				<div class="text-sm text-gray-900 dark:text-white">
-																					{formatTokenUsage(tokens)} tokens
-																				</div>
-																			</div>
-																		{/if}
-																	</div>
-
-																	<div class="space-y-3">
-																		<div
-																			class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
-																		>
-																			<div
-																				class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1"
-																			>
-																				Full Message
-																			</div>
-																			<div
-																				class="text-sm text-gray-900 dark:text-white leading-relaxed"
-																			>
-																				{message}
-																			</div>
-																		</div>
-
-																		{#if entry.data || entry.metadata || entry.errors}
-																			<div
-																				class="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-700"
-																			>
-																				<div
-																					class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2"
-																				>
-																					Additional Data
-																				</div>
-																				<div class="space-y-2">
-																					{#if entry.data}
-																						<div>
-																							<div
-																								class="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1"
-																							>
-																								Data:
+																		<div class="space-y-2">
+																			{#if entry.data}
+																				<div>
+																					<div
+																						class="text-xs text-blue-600 dark:text-blue-400 font-medium mb-1"
+																					>
+																						Data:
 																							</div>
 																							<pre
 																								class="text-xs bg-gray-50 dark:bg-gray-900 p-2 rounded border overflow-auto max-h-24 text-gray-700 dark:text-gray-300">{JSON.stringify(
@@ -1743,7 +1955,7 @@
 
 																<!-- Raw data toggle -->
 																<div class="border-t border-gray-200 dark:border-gray-700 pt-3">
-																	<details class="text-sm">
+																	<details class="text-sm" open>
 																		<summary
 																			class="cursor-pointer text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium flex items-center gap-2"
 																		>

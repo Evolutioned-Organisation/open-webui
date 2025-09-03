@@ -940,6 +940,10 @@ async def generate_chat_completion(
             "email": user.email,
             "role": user.role,
         }
+        
+        # Add chat_id to the payload if available in metadata
+        if metadata and metadata.get("chat_id"):
+            payload["chat_id"] = metadata.get("chat_id")
 
     url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
     key = request.app.state.config.OPENAI_API_KEYS[idx]
