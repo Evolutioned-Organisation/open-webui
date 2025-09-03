@@ -1596,7 +1596,7 @@
 							{:else if isValidJSON(logContent.content) && viewMode === 'tree'}
 								<!-- Compact Tree View -->
 								<div class="overflow-auto max-h-[40rem]">
-									{@html renderEnhancedJsonTree(logContent.content)}
+									{@html renderJsonTree(logContent.content)}
 								</div>
 							{:else if isValidJSON(logContent.content) && viewMode === 'raw'}
 								<!-- Raw JSON -->
