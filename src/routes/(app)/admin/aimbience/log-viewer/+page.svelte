@@ -11,7 +11,6 @@
 	// Utility imports
 	import {
 		validateFilename,
-		validateFilePath,
 		sanitizeUrlParameter,
 		createSafeErrorMessage,
 		isValidJSON,
@@ -31,17 +30,16 @@
 	let loading = false;
 	let error: string | null = null;
 	let filename = '';
-	let filePath = '';
 	let logContent: LogContentResponse | null = null;
 	let viewMode: 'timeline' | 'tree' | 'raw' = 'timeline';
 	let selectedEntry: number | null = null;
 	let isRetrying = false;
 
 	// Computed values
-	$: fileSize = logContent?.file_size || 0;
-	$: modifiedDate = logContent?.modified_date || '';
-	$: chatId = logContent?.chat_id || '';
-	$: logEntries = Array.isArray(logContent?.content) ? logContent.content : [];
+	$: fileSize = logContent?.size || 0;
+	$: modifiedDate = logContent?.modified || '';
+	$: chatId = logContent?.filename || '';
+	$: logEntries = Array.isArray(logContent?.content) ? (logContent.content as LogEntry[]) : [];
 	$: workflowSummary = logContent?.content ? generateWorkflowSummary(logContent.content) : null;
 
 	// Initialize component
@@ -54,20 +52,13 @@
 			// Get filename from URL parameters
 			const urlParams = new URLSearchParams($page.url.search);
 			const urlFilename = urlParams.get('filename');
-			const urlFilePath = urlParams.get('filepath');
 
 			if (!urlFilename || !validateFilename(urlFilename)) {
 				error = 'Invalid or missing filename parameter';
 				return;
 			}
 
-			if (!urlFilePath || !validateFilePath(urlFilePath)) {
-				error = 'Invalid or missing filepath parameter';
-				return;
-			}
-
 			filename = sanitizeUrlParameter(urlFilename);
-			filePath = sanitizeUrlParameter(urlFilePath);
 
 			// Fetch log content
 			await fetchLogContent();
@@ -78,13 +69,14 @@
 	}
 
 	async function fetchLogContent() {
-		if (!filename || !filePath) return;
+		if (!filename) return;
 
 		loading = true;
 		error = null;
 
 		try {
-			const response = await getLogContentViaProxy(filename, filePath);
+			const token = localStorage.getItem('token') || '';
+			const response = await getLogContentViaProxy(token, filename);
 
 			if (!response) {
 				error = 'Failed to fetch log content';
@@ -142,7 +134,7 @@
 	{#if error}
 		<!-- Error State -->
 		<LogViewerError
-			{error}
+			errorMessage={error}
 			{filename}
 			{isRetrying}
 			on:retry={handleRetry}
@@ -157,7 +149,7 @@
 				{fileSize}
 				{modifiedDate}
 				{chatId}
-				{loading}
+				isLoading={loading}
 				{error}
 				on:refresh={handleRefresh}
 				on:goBack={handleGoBack}
