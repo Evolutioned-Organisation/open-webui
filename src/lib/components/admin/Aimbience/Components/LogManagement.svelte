@@ -373,7 +373,7 @@
 		<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 			<div>
 				<h2 class="text-2xl font-bold text-gray-900 dark:text-white" id="log-management-title">
-					Workflow Log Management
+					Workflow Logs
 				</h2>
 				<p class="text-sm text-gray-600 dark:text-gray-400">View workflow logs</p>
 			</div>

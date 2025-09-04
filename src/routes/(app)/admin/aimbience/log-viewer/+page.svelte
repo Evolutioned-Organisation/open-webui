@@ -22,6 +22,7 @@
 	import LogViewerTabs from '$lib/components/admin/Aimbience/Components/LogViewerTabs.svelte';
 	import LogViewerError from '$lib/components/admin/Aimbience/Components/LogViewerError.svelte';
 	import LogTimeline from '$lib/components/admin/Aimbience/Components/LogTimeline.svelte';
+	import LogAnalysis from '$lib/components/admin/Aimbience/Components/LogAnalysis.svelte';
 	import LogRaw from '$lib/components/admin/Aimbience/Components/LogRaw.svelte';
 
 	// State management
@@ -29,7 +30,7 @@
 	let error: string | null = null;
 	let filename = '';
 	let logContent: LogContentResponse | null = null;
-	let viewMode: 'timeline' | 'raw' = 'timeline';
+	let viewMode: 'timeline' | 'analysis' | 'raw' = 'timeline';
 	let selectedEntry: number | null = null;
 	let isRetrying = false;
 
@@ -110,7 +111,7 @@
 		goto('/admin/aimbience/log-management');
 	}
 
-	function handleTabChange(event: CustomEvent<{ viewMode: 'timeline' | 'tree' | 'raw' }>) {
+	function handleTabChange(event: CustomEvent<{ viewMode: 'timeline' | 'analysis' | 'raw' }>) {
 		viewMode = event.detail.viewMode;
 		selectedEntry = null; // Reset selection when changing views
 	}
@@ -179,6 +180,9 @@
 								on:entrySelect={handleEntrySelect}
 								on:entryDeselect={handleEntryDeselect}
 							/>
+						{:else if viewMode === 'analysis'}
+							<!-- Analysis View -->
+							<LogAnalysis {logEntries} />
 						{:else if viewMode === 'raw'}
 							<!-- Raw View -->
 							<LogRaw logContent={logContent.content} />

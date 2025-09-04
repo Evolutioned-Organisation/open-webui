@@ -199,7 +199,7 @@
 					<path d="M18.75 6.75h1.875c.621 0 1.125.504 1.125 1.125V18a1.5 1.5 0 01-3 0V6.75z" />
 				</svg>
 			</div>
-			<div class=" self-center">{$i18n.t('Log Management')}</div>
+			<div class=" self-center">{$i18n.t('Workflow Logs')}</div>
 		</button>
 	</div>
 
