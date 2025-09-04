@@ -78,6 +78,8 @@ export interface LogDirectoryInfo {
 	total_size: number;
 	latest_file: LogFileInfo;
 	files: LogFileInfo[];
+	creation_time: string;
+	modification_time: string;
 }
 
 export interface LogDirectoryStructure {

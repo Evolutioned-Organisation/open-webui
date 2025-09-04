@@ -88,6 +88,24 @@
 		}
 	};
 
+	const formatCreationTime = (isoString?: string) => {
+		if (!isoString) return 'N/A';
+		try {
+			return dayjs(isoString).format('LLL');
+		} catch {
+			return 'Invalid Date';
+		}
+	};
+
+	const formatCreationRelativeTime = (isoString?: string) => {
+		if (!isoString) return 'N/A';
+		try {
+			return dayjs(isoString).fromNow();
+		} catch {
+			return 'Invalid Date';
+		}
+	};
+
 	const toggleFolder = (chatId: string) => {
 		if (expandedFolders.has(chatId)) {
 			expandedFolders.delete(chatId);
@@ -569,8 +587,11 @@
 										</div>
 									</div>
 								</div>
-								<div class="text-sm text-gray-500 dark:text-gray-400">
-									{formatRelativeTime(directory.latest_file.modified)}
+								<div
+									class="text-sm text-gray-500 dark:text-gray-400"
+									title="Created: {formatCreationTime(directory.creation_time)}"
+								>
+									Created {formatCreationRelativeTime(directory.creation_time)}
 								</div>
 							</div>
 
