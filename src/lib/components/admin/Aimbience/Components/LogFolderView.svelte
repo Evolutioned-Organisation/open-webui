@@ -63,29 +63,11 @@
 		});
 	}
 
-	const formatDate = (timestamp?: number) => {
-		if (!timestamp) return 'N/A';
-		try {
-			return dayjs(timestamp * 1000).format('LLL');
-		} catch {
-			return 'Invalid Date';
-		}
-	};
-
 	const formatFileSize = (bytes?: number) => {
 		if (!bytes) return '0 B';
 		const sizes = ['B', 'KB', 'MB', 'GB'];
 		const i = Math.floor(Math.log(bytes) / Math.log(1024));
 		return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
-	};
-
-	const formatRelativeTime = (timestamp?: number) => {
-		if (!timestamp) return 'N/A';
-		try {
-			return dayjs(timestamp * 1000).fromNow();
-		} catch {
-			return 'Invalid Date';
-		}
 	};
 
 	const formatCreationTime = (isoString?: string) => {
@@ -600,55 +582,46 @@
 								<div class="mt-3 ml-8 space-y-2">
 									{#each directory.files as file (file.path)}
 										<div
-											class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors duration-200 {selectedFile ===
+											class="flex items-center p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors duration-200 {selectedFile ===
 											file.path
 												? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700'
 												: ''}"
 											on:click={() => {
 												selectFile(file.path);
+												viewLog(file.path);
 											}}
 											on:keydown={(e) => {
 												if (e.key === 'Enter' || e.key === ' ') {
 													e.preventDefault();
 													selectFile(file.path);
+													viewLog(file.path);
 												}
 											}}
 											tabindex="0"
 											role="button"
-											aria-label="Select file {file.filename}"
+											aria-label="View log file {file.filename}"
+											title="Click to view {file.filename}"
 										>
-											<div class="flex items-center gap-3">
+											<div class="flex items-center gap-3 flex-1">
 												<File className="size-4 text-gray-500 dark:text-gray-400" />
-												<div>
+												<div class="flex-1">
 													<div class="font-mono text-sm text-gray-900 dark:text-white">
 														{file.filename}
 													</div>
-													<div class="text-xs text-gray-500 dark:text-gray-400">
-														{formatFileSize(file.size)} • {formatRelativeTime(file.modified)}
-													</div>
 												</div>
-											</div>
-											<button
-												on:click|stopPropagation={() => viewLog(file.path)}
-												disabled={viewingLog === file.filename}
-												class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/30 border border-blue-200 dark:border-blue-700 rounded-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed shadow-sm hover:shadow-md"
-												title="View log content for {file.filename}"
-												aria-label="View log file {file.filename}"
-											>
 												{#if viewingLog === file.filename}
-													<Spinner className="size-3" />
-													<span>Loading...</span>
+													<Spinner className="size-4" />
 												{:else}
-													<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+													<svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 														<path
-															fill-rule="evenodd"
-															d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-1a1 1 0 00-1-1H9a1 1 0 00-1 1v1a1 1 0 01-1 1H4a1 1 0 110-2V4z"
-															clip-rule="evenodd"
+															stroke-linecap="round"
+															stroke-linejoin="round"
+															stroke-width="2"
+															d="M9 5l7 7-7 7"
 														/>
 													</svg>
-													<span>View</span>
 												{/if}
-											</button>
+											</div>
 										</div>
 									{/each}
 								</div>
