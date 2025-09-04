@@ -626,11 +626,13 @@
 													<div class="font-mono text-sm text-gray-900 dark:text-white truncate">
 														{file.filename}
 													</div>
-													<div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+													<div
+														class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2"
+													>
 														<span>{formatFileSize(file.file_size)}</span>
 														<span>•</span>
-														<span title={formatDateTime(file.modification_time)}>
-															{formatRelativeTime(file.modification_time)}
+														<span>
+															{formatDateTime(file.modification_time)}
 														</span>
 													</div>
 												</div>
