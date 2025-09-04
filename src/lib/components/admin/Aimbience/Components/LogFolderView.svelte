@@ -70,6 +70,24 @@
 		return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
 	};
 
+	const formatRelativeTime = (isoString?: string) => {
+		if (!isoString) return 'N/A';
+		try {
+			return dayjs(isoString).fromNow();
+		} catch {
+			return 'Invalid Date';
+		}
+	};
+
+	const formatDateTime = (isoString?: string) => {
+		if (!isoString) return 'N/A';
+		try {
+			return dayjs(isoString).format('MMM D, YYYY h:mm A');
+		} catch {
+			return 'Invalid Date';
+		}
+	};
+
 	const formatCreationTime = (isoString?: string) => {
 		if (!isoString) return 'N/A';
 		try {
@@ -604,15 +622,27 @@
 										>
 											<div class="flex items-center gap-3 flex-1">
 												<File className="size-4 text-gray-500 dark:text-gray-400" />
-												<div class="flex-1">
-													<div class="font-mono text-sm text-gray-900 dark:text-white">
+												<div class="flex-1 min-w-0">
+													<div class="font-mono text-sm text-gray-900 dark:text-white truncate">
 														{file.filename}
+													</div>
+													<div class="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-2">
+														<span>{formatFileSize(file.file_size)}</span>
+														<span>•</span>
+														<span title={formatDateTime(file.modification_time)}>
+															{formatRelativeTime(file.modification_time)}
+														</span>
 													</div>
 												</div>
 												{#if viewingLog === file.filename}
 													<Spinner className="size-4" />
 												{:else}
-													<svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<svg
+														class="w-4 h-4 text-gray-400"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+													>
 														<path
 															stroke-linecap="round"
 															stroke-linejoin="round"
