@@ -67,7 +67,7 @@ export interface LogListResponse {
 export interface LogContentResponse {
 	filename: string;
 	size: number;
-	modified: number;
+	modified: number; // Unix timestamp
 	content: string[] | Record<string, unknown>; // JSON object or string array
 	timestamp?: string;
 }

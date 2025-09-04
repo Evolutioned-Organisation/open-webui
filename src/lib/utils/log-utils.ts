@@ -86,7 +86,9 @@ export function formatTokenUsage(tokens: number): string {
  */
 export function formatTimelineTimestamp(timestamp: string | number): string {
 	try {
-		const date = new Date(timestamp);
+		// Handle Unix timestamp (seconds) by converting to milliseconds
+		const ts = typeof timestamp === 'number' ? timestamp * 1000 : timestamp;
+		const date = new Date(ts);
 		return date.toLocaleString();
 	} catch {
 		return timestamp.toString();
@@ -98,7 +100,9 @@ export function formatTimelineTimestamp(timestamp: string | number): string {
  */
 export function formatDate(date: string | number): string {
 	try {
-		return new Date(date).toLocaleString();
+		// Handle Unix timestamp (seconds) by converting to milliseconds
+		const timestamp = typeof date === 'number' ? date * 1000 : date;
+		return new Date(timestamp).toLocaleString();
 	} catch {
 		return date.toString();
 	}
