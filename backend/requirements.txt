@@ -40,6 +40,7 @@ loguru==0.7.3
 asgiref==3.8.1
 
 # AI libraries
+numpy<2.0  # Pin to NumPy 1.x for compatibility with compiled modules
 openai
 anthropic
 google-genai==1.28.0

@@ -67,9 +67,27 @@ export interface LogListResponse {
 export interface LogContentResponse {
 	filename: string;
 	size: number;
-	modified: number;
+	modified: number; // Unix timestamp
 	content: string[] | Record<string, unknown>; // JSON object or string array
 	timestamp?: string;
+}
+
+export interface LogDirectoryInfo {
+	chat_id: string;
+	file_count: number;
+	total_size: number;
+	latest_file: LogFileInfo;
+	files: LogFileInfo[];
+	creation_time: string;
+	modification_time: string;
+}
+
+export interface LogDirectoryStructure {
+	directories: LogDirectoryInfo[];
+	files: LogFileInfo[]; // Files in root directory (legacy support)
+	total_directories: number;
+	total_files: number;
+	total_size: number;
 }
 
 export const getBatchesViaProxy = async (
@@ -297,6 +315,68 @@ export const getLogsViaProxy = async (
 		}
 	} catch (err) {
 		console.error('Error in getLogsViaProxy:', err);
+		return null;
+	}
+};
+
+/**
+ * Retrieves log directory structure from AIMBY-API via Open-WebUI proxy
+ *
+ * This function fetches the directory structure of log files organized by chat_id
+ * from the AIMBY-API service through the Open-WebUI backend proxy.
+ *
+ * @param token - Authentication token for the request
+ * @returns Promise<LogDirectoryStructure | null> - Directory structure or null if error
+ *
+ * @example
+ * ```typescript
+ * const structure = await getLogDirectoryStructureViaProxy(userToken);
+ * if (structure) {
+ *   console.log(`Found ${structure.total_directories} chat directories`);
+ * }
+ * ```
+ */
+export const getLogDirectoryStructureViaProxy = async (
+	token: string = ''
+): Promise<LogDirectoryStructure | null> => {
+	try {
+		// Validate input parameters
+		if (!token || typeof token !== 'string') {
+			throw new Error('Invalid token provided');
+		}
+
+		// Use relative path - Vite will proxy this to the backend
+		const apiUrl = `${AIMBY_PROXY_BASE}/api/v1/logs/structure`;
+
+		console.log('Fetching log directory structure from:', apiUrl);
+
+		const res = await fetch(apiUrl, {
+			method: 'GET',
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			}
+		});
+
+		if (!res.ok) {
+			const errorData = await res.json().catch(() => ({ detail: res.statusText }));
+			const error = errorData.detail || res.statusText;
+			console.error('API error:', res.status, error);
+			return null;
+		}
+
+		const data = await res.json();
+		console.log('Log directory structure response:', data);
+
+		// Validate response structure
+		if (!data || typeof data !== 'object') {
+			throw new Error('Invalid response format from server');
+		}
+
+		return data as LogDirectoryStructure;
+	} catch (err) {
+		console.error('Error in getLogDirectoryStructureViaProxy:', err);
 		return null;
 	}
 };
