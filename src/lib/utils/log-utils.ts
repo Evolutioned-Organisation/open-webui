@@ -54,6 +54,53 @@ export interface WorkflowSummary {
 	cypherQueries: number;
 }
 
+export interface WorkflowAnalysis {
+	// Basic workflow info
+	workflowId: string;
+	chatId: string;
+	question: string;
+	startTime: string;
+	endTime: string;
+	totalDuration: number;
+
+	// Performance metrics
+	processingTime: number;
+	responseGenerationTime: number;
+	searchAndTraversalTime: number;
+
+	// Content analysis
+	responseLength: number;
+	chunksFound: number;
+	entitiesFound: number;
+	claimsFound: number;
+
+	// Token usage
+	totalTokens: number;
+	tokenBreakdown: {
+		promptTokens: number;
+		completionTokens: number;
+		totalTokens: number;
+	};
+
+	// Classification
+	questionType: string;
+	classification: string;
+	confidence: number;
+
+	// Quality metrics
+	contextQuality: {
+		completeness: number;
+		relevance: number;
+		diversity: number;
+		overallQuality: number;
+	};
+
+	// Success indicators
+	success: boolean;
+	errorCount: number;
+	warningCount: number;
+}
+
 // ============================================================================
 // FORMATTING FUNCTIONS
 // ============================================================================
@@ -122,15 +169,22 @@ export function formatDuration(duration: number): string {
 
 /**
  * Detect if a log entry contains a Cypher query
+ * Now uses standardized event_type field for detection
  */
 export function isCypherQuery(entry: LogEntry): boolean {
 	if (!entry) return false;
 
-	// Check for explicit query type
-	if (entry.query_type === 'entity_discovery' || entry.query_type === 'claim_discovery')
+	// Primary detection: Check for standardized event_type
+	if (entry.event_type === 'graph_traversal') {
 		return true;
+	}
 
-	// Check message content for Cypher keywords
+	// Fallback: Check for explicit query type (legacy support)
+	if (entry.query_type === 'entity_discovery' || entry.query_type === 'claim_discovery') {
+		return true;
+	}
+
+	// Fallback: Check message content for Cypher keywords (legacy support)
 	const message = entry.message || entry.msg || entry.text || '';
 	const cypherKeywords = ['MATCH', 'CREATE', 'MERGE', 'DELETE', 'SET', 'RETURN', 'WHERE', 'WITH'];
 	const hasKeywords = cypherKeywords.some((keyword) => message.toUpperCase().includes(keyword));
@@ -507,4 +561,215 @@ export function createSafeErrorMessage(error: any): string {
 		return error.message.replace(/[<>]/g, '');
 	}
 	return 'An unknown error occurred';
+}
+
+// ============================================================================
+// WORKFLOW ANALYSIS FUNCTIONS
+// ============================================================================
+
+/**
+ * Generate comprehensive workflow analysis from log content
+ */
+export function generateWorkflowAnalysis(content: any): WorkflowAnalysis | null {
+	if (!content || !Array.isArray(content)) {
+		return null;
+	}
+
+	const analysis: WorkflowAnalysis = {
+		workflowId: '',
+		chatId: '',
+		question: '',
+		startTime: '',
+		endTime: '',
+		totalDuration: 0,
+		processingTime: 0,
+		responseGenerationTime: 0,
+		searchAndTraversalTime: 0,
+		responseLength: 0,
+		chunksFound: 0,
+		entitiesFound: 0,
+		claimsFound: 0,
+		totalTokens: 0,
+		tokenBreakdown: {
+			promptTokens: 0,
+			completionTokens: 0,
+			totalTokens: 0
+		},
+		questionType: '',
+		classification: '',
+		confidence: 0,
+		contextQuality: {
+			completeness: 0,
+			relevance: 0,
+			diversity: 0,
+			overallQuality: 0
+		},
+		success: false,
+		errorCount: 0,
+		warningCount: 0
+	};
+
+	// Process each log entry
+	content.forEach((entry: LogEntry) => {
+		// Extract basic workflow info
+		if (entry.workflow_id) analysis.workflowId = entry.workflow_id;
+		if (entry.chat_id) analysis.chatId = entry.chat_id;
+
+		// Extract question
+		if (entry.input_question) {
+			analysis.question = entry.input_question;
+		}
+
+		// Extract timestamps
+		if (entry.timestamp) {
+			if (entry.message?.includes('BEFORE_EXECUTE STARTED')) {
+				analysis.startTime = entry.timestamp.toString();
+			}
+			if (entry.message?.includes('AFTER_EXECUTE COMPLETED')) {
+				analysis.endTime = entry.timestamp.toString();
+			}
+		}
+
+		// Extract durations
+		if (entry.duration_ms) {
+			analysis.totalDuration += entry.duration_ms;
+
+			if (entry.step_name === 'classify_question') {
+				analysis.processingTime += entry.duration_ms;
+			}
+			if (entry.event_type === 'response_generation_complete') {
+				analysis.responseGenerationTime = entry.duration_ms;
+			}
+			if (entry.event_type === 'search_and_traversal_complete') {
+				analysis.searchAndTraversalTime = entry.duration_ms;
+			}
+		}
+
+		// Extract response info
+		if (entry.response_length) {
+			analysis.responseLength = entry.response_length;
+		}
+
+		// Extract search results
+		if (entry.chunks_found) {
+			analysis.chunksFound = entry.chunks_found;
+		}
+		if (entry.entities_found) {
+			analysis.entitiesFound = entry.entities_found;
+		}
+		if (entry.claims_found) {
+			analysis.claimsFound = entry.claims_found;
+		}
+
+		// Extract token usage
+		if (entry.tokens) {
+			analysis.totalTokens += entry.tokens;
+		}
+		if (entry.token_usage) {
+			analysis.tokenBreakdown.promptTokens += entry.token_usage.prompt_tokens || 0;
+			analysis.tokenBreakdown.completionTokens += entry.token_usage.completion_tokens || 0;
+			analysis.tokenBreakdown.totalTokens += entry.token_usage.total_tokens || 0;
+		}
+
+		// Extract classification info
+		if (entry.classification) {
+			analysis.questionType = entry.classification.question_type || '';
+			analysis.classification = entry.classification.classification || '';
+			analysis.confidence = entry.classification.confidence || 0;
+		}
+
+		// Extract context quality
+		if (entry.context_quality) {
+			analysis.contextQuality = {
+				completeness: entry.context_quality.completeness || 0,
+				relevance: entry.context_quality.relevance || 0,
+				diversity: entry.context_quality.diversity || 0,
+				overallQuality: entry.context_quality.overall_quality || 0
+			};
+		}
+
+		// Extract success status
+		if (entry.success !== undefined) {
+			analysis.success = entry.success;
+		}
+
+		// Count errors and warnings
+		if (entry.level === 'ERROR') {
+			analysis.errorCount++;
+		}
+		if (entry.level === 'WARNING') {
+			analysis.warningCount++;
+		}
+	});
+
+	return analysis;
+}
+
+/**
+ * Format duration for display
+ */
+export function formatDurationDisplay(duration: number): string {
+	if (!duration) return 'N/A';
+
+	if (duration < 1000) {
+		return `${duration}ms`;
+	} else if (duration < 60000) {
+		return `${(duration / 1000).toFixed(1)}s`;
+	} else {
+		const minutes = Math.floor(duration / 60000);
+		const seconds = ((duration % 60000) / 1000).toFixed(1);
+		return `${minutes}m ${seconds}s`;
+	}
+}
+
+/**
+ * Format token count for display
+ */
+export function formatTokenDisplay(tokens: number): string {
+	if (!tokens) return '0';
+
+	if (tokens >= 1000000) {
+		return `${(tokens / 1000000).toFixed(1)}M`;
+	} else if (tokens >= 1000) {
+		return `${(tokens / 1000).toFixed(1)}K`;
+	}
+	return tokens.toString();
+}
+
+/**
+ * Get performance grade based on duration
+ */
+export function getPerformanceGrade(duration: number): {
+	grade: string;
+	color: string;
+	description: string;
+} {
+	if (duration < 5000) {
+		return { grade: 'A', color: 'green', description: 'Excellent' };
+	} else if (duration < 15000) {
+		return { grade: 'B', color: 'blue', description: 'Good' };
+	} else if (duration < 30000) {
+		return { grade: 'C', color: 'yellow', description: 'Average' };
+	} else {
+		return { grade: 'D', color: 'red', description: 'Slow' };
+	}
+}
+
+/**
+ * Get quality grade based on context quality score
+ */
+export function getQualityGrade(quality: number): {
+	grade: string;
+	color: string;
+	description: string;
+} {
+	if (quality >= 0.9) {
+		return { grade: 'A', color: 'green', description: 'Excellent' };
+	} else if (quality >= 0.7) {
+		return { grade: 'B', color: 'blue', description: 'Good' };
+	} else if (quality >= 0.5) {
+		return { grade: 'C', color: 'yellow', description: 'Average' };
+	} else {
+		return { grade: 'D', color: 'red', description: 'Poor' };
+	}
 }

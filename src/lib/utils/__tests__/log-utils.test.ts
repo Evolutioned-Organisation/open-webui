@@ -71,6 +71,11 @@ describe('log-utils', () => {
 	});
 
 	describe('isCypherQuery', () => {
+		it('should detect graph_traversal event type', () => {
+			const entry: LogEntry = { event_type: 'graph_traversal' };
+			expect(isCypherQuery(entry)).toBe(true);
+		});
+
 		it('should detect entity_discovery query type', () => {
 			const entry: LogEntry = { query_type: 'entity_discovery' };
 			expect(isCypherQuery(entry)).toBe(true);
