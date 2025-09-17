@@ -24,7 +24,7 @@
 	import { getLogsViaProxy, type LogFileInfo, type LogListResponse } from '$lib/apis/aimby';
 	import { getAimbienceConfig } from '$lib/apis/auths';
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import ArrowDownTray from '$lib/components/icons/ArrowDownTray.svelte';
+	import Download from '$lib/components/icons/Download.svelte';
 	import Badge from '$lib/components/common/Badge.svelte';
 	import CloudArrowUp from '$lib/components/icons/CloudArrowUp.svelte';
 	import Pagination from '$lib/components/common/Pagination.svelte';
