@@ -14,6 +14,7 @@
 	import { createMessagesList } from '$lib/utils';
 	import { user } from '$lib/stores';
 	import Messages from '../chat/Messages.svelte';
+	import { goto } from '$app/navigation';
 	dayjs.extend(calendar);
 
 	export let show = false;
@@ -250,7 +251,7 @@
 			/>
 		</div>
 
-		<!-- <hr class="border-gray-100 dark:border-gray-850 my-1" /> -->
+		<!-- <hr class="border-gray-50 dark:border-gray-850 my-1" /> -->
 
 		<div class="flex px-3 pb-1">
 			<div
@@ -303,7 +304,8 @@
 							on:mouseenter={() => {
 								selectedIdx = idx;
 							}}
-							on:click={() => {
+							on:click={async () => {
+								await goto(`/c/${chat.id}`);
 								show = false;
 								onClose();
 							}}
@@ -328,9 +330,9 @@
 								}
 							}}
 						>
-							<div class="w-full flex justify-center py-1 text-xs animate-pulse items-center gap-2">
+							<div class="w-full flex justify-center py-4 text-xs animate-pulse items-center gap-2">
 								<Spinner className=" size-4" />
-								<div class=" ">Loading...</div>
+								<div class=" ">{$i18n.t('Loading...')}</div>
 							</div>
 						</Loader>
 					{/if}

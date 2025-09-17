@@ -8,7 +8,7 @@
 	import { getBatchesViaProxy, type BatchListItem } from '$lib/apis/aimby';
 	import { getAimbienceConfig } from '$lib/apis/auths'; // Updated import
 	import Tooltip from '$lib/components/common/Tooltip.svelte';
-	import ArrowDownTray from '$lib/components/icons/ArrowDownTray.svelte';
+	import Download from '$lib/components/icons/Download.svelte';
 	import Badge from '$lib/components/common/Badge.svelte';
 	import CloudArrowUp from '$lib/components/icons/CloudArrowUp.svelte';
 	import Pagination from '$lib/components/common/Pagination.svelte';
@@ -238,7 +238,7 @@
 					on:click={exportToCSV}
 					disabled={batches.length === 0}
 				>
-					<ArrowDownTray className="size-4" />
+					<Download className="size-4" />
 					Export CSV
 				</button>
 			</div>
