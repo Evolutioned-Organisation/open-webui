@@ -68,26 +68,12 @@ export const replaceTokens = (content, sourceIds, char, user) => {
 		});
 
 		if (Array.isArray(sourceIds)) {
-			// Match both [1], [2], and [1,2,3] forms
-			const multiRefRegex = /\[([\d,\s]+)\]/g;
-			segment = segment.replace(multiRefRegex, (match, group) => {
-				// Extract numbers like 1,2,3
-				const indices = group
-					.split(',')
-					.map((n) => parseInt(n.trim(), 10))
-					.filter((n) => !isNaN(n));
-
-				// Replace each index with a <source_id> tag
-				const sources = indices
-					.map((idx) => {
-						const sourceId = sourceIds[idx - 1];
-						return sourceId
-							? `<source_id data="${idx}" title="${encodeURIComponent(sourceId)}" />`
-							: match;
-					})
-					.join('');
-
-				return sources;
+			sourceIds.forEach((sourceId, idx) => {
+				const regex = new RegExp(`\\[${idx + 1}\\]`, 'g');
+				segment = segment.replace(
+					regex,
+					`<source_id data="${idx + 1}" title="${encodeURIComponent(sourceId)}" />`
+				);
 			});
 		}
 
@@ -1594,18 +1580,21 @@ export const decodeString = (str: string) => {
 };
 
 export const renderMermaidDiagram = async (code: string) => {
-	const { default: mermaid } = await import('mermaid');
-	mermaid.initialize({
-		startOnLoad: false, // Should be false when using render API
-		theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
-		securityLevel: 'loose'
-	});
-	const parseResult = await mermaid.parse(code, { suppressErrors: false });
-	if (parseResult) {
-		const { svg } = await mermaid.render(`mermaid-${uuidv4()}`, code);
-		return svg;
+	try {
+		const { default: mermaid } = await import('mermaid');
+		mermaid.initialize({
+			startOnLoad: true,
+			theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default',
+			securityLevel: 'loose'
+		});
+		if (await mermaid.parse(code)) {
+			const { svg } = await mermaid.render(`mermaid-${uuidv4()}`, code);
+			return svg;
+		}
+	} catch (error) {
+		console.log('Failed to render mermaid diagram:', error);
+		return '';
 	}
-	return '';
 };
 
 export const renderVegaVisualization = async (spec: string, i18n?: any) => {

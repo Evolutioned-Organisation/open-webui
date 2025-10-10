@@ -3543,3 +3543,37 @@ LDAP_ATTRIBUTE_FOR_GROUPS = PersistentConfig(
     "ldap.server.attribute_for_groups",
     os.environ.get("LDAP_ATTRIBUTE_FOR_GROUPS", "memberOf"),
 )
+
+####################################
+# Aimbience
+####################################
+
+ENABLE_AIMBENCE = PersistentConfig(
+    "ENABLE_AIMBENCE",
+    "aimbience.enable",
+    os.environ.get("ENABLE_AIMBENCE", "false").lower() == "true",
+)
+
+AIMBENCE_API_BASE_URL = PersistentConfig(
+    "AIMBENCE_API_BASE_URL",
+    "aimbience.api.base_url",
+    os.environ.get("AIMBENCE_API_BASE_URL", "http://localhost:8000"),
+)
+
+AIMBENCE_API_KEY = PersistentConfig(
+    "AIMBENCE_API_KEY",
+    "aimbience.api.key",
+    os.environ.get("AIMBENCE_API_KEY", ""),
+)
+
+AIMBENCE_TIMEOUT = PersistentConfig(
+    "AIMBENCE_TIMEOUT",
+    "aimbience.api.timeout",
+    int(os.environ.get("AIMBENCE_TIMEOUT", "30")),
+)
+
+AIMBENCE_BATCH_SIZE = PersistentConfig(
+    "AIMBENCE_BATCH_SIZE",
+    "aimbience.api.batch_size",
+    int(os.environ.get("AIMBENCE_BATCH_SIZE", "10")),
+)

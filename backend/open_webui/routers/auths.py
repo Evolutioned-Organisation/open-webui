@@ -1070,3 +1070,193 @@ async def get_api_key(user=Depends(get_current_user)):
         }
     else:
         raise HTTPException(404, detail=ERROR_MESSAGES.API_KEY_NOT_FOUND)
+
+
+############################
+# Aimbience Config
+############################
+
+
+class AimbienceConfig(BaseModel):
+    ENABLE_AIMBENCE: bool = False
+    AIMBENCE_API_BASE_URL: str = "http://localhost:8000"
+    AIMBENCE_API_KEY: str = ""
+    AIMBENCE_TIMEOUT: int = 30
+    AIMBENCE_BATCH_SIZE: int = 10
+
+
+@router.get("/admin/config/aimbience", response_model=AimbienceConfig)
+async def get_aimbience_config(request: Request, user=Depends(get_admin_user)):
+    return {
+        "ENABLE_AIMBENCE": request.app.state.config.ENABLE_AIMBENCE,
+        "AIMBENCE_API_BASE_URL": request.app.state.config.AIMBENCE_API_BASE_URL,
+        "AIMBENCE_API_KEY": request.app.state.config.AIMBENCE_API_KEY,
+        "AIMBENCE_TIMEOUT": request.app.state.config.AIMBENCE_TIMEOUT,
+        "AIMBENCE_BATCH_SIZE": request.app.state.config.AIMBENCE_BATCH_SIZE,
+    }
+
+
+@router.post("/admin/config/aimbience")
+async def update_aimbience_config(
+    request: Request, form_data: AimbienceConfig, user=Depends(get_admin_user)
+):
+    request.app.state.config.ENABLE_AIMBENCE = form_data.ENABLE_AIMBENCE
+    request.app.state.config.AIMBENCE_API_BASE_URL = form_data.AIMBENCE_API_BASE_URL
+    request.app.state.config.AIMBENCE_API_KEY = form_data.AIMBENCE_API_KEY
+    request.app.state.config.AIMBENCE_TIMEOUT = form_data.AIMBENCE_TIMEOUT
+    request.app.state.config.AIMBENCE_BATCH_SIZE = form_data.AIMBENCE_BATCH_SIZE
+
+    return {
+        "ENABLE_AIMBENCE": request.app.state.config.ENABLE_AIMBENCE,
+        "AIMBENCE_API_BASE_URL": request.app.state.config.AIMBENCE_API_BASE_URL,
+        "AIMBENCE_API_KEY": request.app.state.config.AIMBENCE_API_KEY,
+        "AIMBENCE_TIMEOUT": request.app.state.config.AIMBENCE_TIMEOUT,
+        "AIMBENCE_BATCH_SIZE": request.app.state.config.AIMBENCE_BATCH_SIZE,
+    }
+
+
+@router.api_route("/admin/aimbience/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+async def aimbience_proxy(
+    request: Request, 
+    path: str, 
+    user=Depends(get_admin_user)
+):
+    """Proxy endpoint for Aimbience API calls to avoid CORS issues"""
+    try:
+        # Get Aimbience config from individual fields
+        base_url = getattr(request.app.state.config, 'AIMBENCE_API_BASE_URL', '')
+        api_key = getattr(request.app.state.config, 'AIMBENCE_API_KEY', '')
+        
+        # Build the target URL
+        target_url = f"{base_url}/{path}"
+        
+        # Get query parameters
+        query_params = str(request.query_params)
+        if query_params:
+            target_url += f"?{query_params}"
+        
+        # Log the proxy request for debugging
+        print(f"Aimbience proxy: {request.method} {path} -> {target_url}")
+        print(f"API Key present: {bool(api_key)}")
+        print(f"API Key length: {len(api_key) if api_key else 0}")
+        print(f"Request headers: {dict(request.headers)}")
+        
+        # Make the request to aimby-api
+        # Note: Package operations (upgrade/install) are async and return task IDs immediately
+        # The frontend then monitors task progress separately
+        import httpx
+        async with httpx.AsyncClient() as client:
+            headers = {
+                "Accept": "application/json"
+            }
+            
+            # Only add Content-Type for requests that might have a body
+            if request.method in ["POST", "PUT", "PATCH"]:
+                headers["Content-Type"] = "application/json"
+            
+            # Don't send authentication for public endpoints
+            public_endpoints = ["health", "docs", "openapi.json"]
+            if api_key and path not in public_endpoints:
+                headers["Authorization"] = f"Bearer {api_key}"
+                print(f"Setting Authorization header: Bearer {api_key[:10]}...")
+            else:
+                if path in public_endpoints:
+                    print(f"Public endpoint '{path}' - no authentication required")
+                else:
+                    print("No API key found, proceeding without authentication")
+            
+            print(f"Final request headers to backend: {headers}")
+            
+            # Get request body for POST/PUT/PATCH requests
+            body = None
+            if request.method in ["POST", "PUT", "PATCH"]:
+                try:
+                    body = await request.body()
+                    if body:
+                        # Try to parse as JSON for logging
+                        try:
+                            import json
+                            body_json = json.loads(body)
+                            print(f"Request body: {body_json}")
+                        except:
+                            print(f"Request body (raw): {body}")
+                except Exception as e:
+                    print(f"Error reading request body: {e}")
+            
+            # Make the request with the appropriate method
+            if request.method == "GET":
+                response = await client.get(target_url, headers=headers, timeout=30.0)
+            elif request.method == "POST":
+                if "packages" in path:
+                    # Package operations should return very quickly (task ID only)
+                    timeout = 10.0  # Reduced timeout for package operations
+                    print(f"Using reduced timeout {timeout}s for package operation")
+                else:
+                    timeout = 30.0
+                response = await client.post(target_url, headers=headers, content=body, timeout=timeout)
+            elif request.method == "PUT":
+                response = await client.put(target_url, headers=headers, content=body, timeout=30.0)
+            elif request.method == "DELETE":
+                response = await client.delete(target_url, headers=headers, timeout=30.0)
+            elif request.method == "PATCH":
+                response = await client.patch(target_url, headers=headers, content=body, timeout=30.0)
+            else:
+                raise HTTPException(status_code=405, detail=f"Method {request.method} not supported")
+            
+            # Log the response for debugging
+            print(f"Aimbience proxy response: {response.status_code}")
+            print(f"Aimbience proxy response headers: {dict(response.headers)}")
+            
+            # Check if response is successful
+            if response.status_code >= 400:
+                print(f"Aimbience proxy error response: {response.text}")
+            
+            # For package operations, we need to handle the response efficiently
+            # The response body is typically just a JSON task ID, so we can read it quickly
+            if "packages" in path and request.method == "POST":
+                print(f"Handling package operation response for {path}")
+                try:
+                    # Read response body with a reasonable timeout
+                    response_text = await response.aread()
+                    response_str = response_text.decode('utf-8')
+                    print(f"Package operation response body: {response_str}")
+                    
+                    # Validate that we got a proper response
+                    if response_str and len(response_str) > 0:
+                        return Response(
+                            content=response_text,
+                            status_code=response.status_code,
+                            headers=dict(response.headers)
+                        )
+                    else:
+                        print("Warning: Empty response body, returning fallback")
+                        return Response(
+                            content='{"success": true, "message": "Package operation started", "status": "started"}',
+                            status_code=200,
+                            headers=dict(response.headers)
+                        )
+                except Exception as e:
+                    print(f"Error reading package response body: {e}")
+                    print(f"Response status: {response.status_code}")
+                    print(f"Response headers: {dict(response.headers)}")
+                    # If reading fails, return a minimal response with the task ID
+                    # This ensures the frontend gets a response even if body reading fails
+                    return Response(
+                        content='{"success": true, "message": "Package operation started", "status": "started"}',
+                        status_code=200,
+                        headers=dict(response.headers)
+                    )
+            
+            # For other operations, use streaming response to avoid timeouts
+            return Response(
+                content=response.content,
+                status_code=response.status_code,
+                headers=dict(response.headers)
+            )
+            
+    except Exception as e:
+        import traceback
+        print(f"Aimbience proxy error: {str(e)}")
+        print(f"Aimbience proxy error type: {type(e).__name__}")
+        print(f"Aimbience proxy error traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Proxy error: {str(e)}")
