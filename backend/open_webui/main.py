@@ -8,7 +8,6 @@ import shutil
 import sys
 import time
 import random
-import re
 from uuid import uuid4
 
 
@@ -175,14 +174,13 @@ from open_webui.config import (
     AUDIO_STT_AZURE_LOCALES,
     AUDIO_STT_AZURE_BASE_URL,
     AUDIO_STT_AZURE_MAX_SPEAKERS,
+    AUDIO_TTS_API_KEY,
     AUDIO_TTS_ENGINE,
     AUDIO_TTS_MODEL,
-    AUDIO_TTS_VOICE,
     AUDIO_TTS_OPENAI_API_BASE_URL,
     AUDIO_TTS_OPENAI_API_KEY,
-    AUDIO_TTS_OPENAI_PARAMS,
-    AUDIO_TTS_API_KEY,
     AUDIO_TTS_SPLIT_ON,
+    AUDIO_TTS_VOICE,
     AUDIO_TTS_AZURE_SPEECH_REGION,
     AUDIO_TTS_AZURE_SPEECH_BASE_URL,
     AUDIO_TTS_AZURE_SPEECH_OUTPUT_FORMAT,
@@ -243,16 +241,11 @@ from open_webui.config import (
     DATALAB_MARKER_DISABLE_IMAGE_EXTRACTION,
     DATALAB_MARKER_FORMAT_LINES,
     DATALAB_MARKER_OUTPUT_FORMAT,
-    MINERU_API_MODE,
-    MINERU_API_URL,
-    MINERU_API_KEY,
-    MINERU_PARAMS,
     DATALAB_MARKER_USE_LLM,
     EXTERNAL_DOCUMENT_LOADER_URL,
     EXTERNAL_DOCUMENT_LOADER_API_KEY,
     TIKA_SERVER_URL,
     DOCLING_SERVER_URL,
-    DOCLING_PARAMS,
     DOCLING_DO_OCR,
     DOCLING_FORCE_OCR,
     DOCLING_OCR_ENGINE,
@@ -385,6 +378,12 @@ from open_webui.config import (
     ENABLE_LDAP_GROUP_MANAGEMENT,
     ENABLE_LDAP_GROUP_CREATION,
     LDAP_ATTRIBUTE_FOR_GROUPS,
+    # Aimbience
+    ENABLE_AIMBENCE,
+    AIMBENCE_API_BASE_URL,
+    AIMBENCE_API_KEY,
+    AIMBENCE_TIMEOUT,
+    AIMBENCE_BATCH_SIZE,
     # Misc
     ENV,
     CACHE_DIR,
@@ -454,7 +453,6 @@ from open_webui.env import (
     ENABLE_OTEL,
     EXTERNAL_PWA_MANIFEST_URL,
     AIOHTTP_CLIENT_SESSION_SSL,
-    ENABLE_STAR_SESSIONS_MIDDLEWARE,
 )
 
 
@@ -785,6 +783,12 @@ app.state.config.ENABLE_LDAP_GROUP_MANAGEMENT = ENABLE_LDAP_GROUP_MANAGEMENT
 app.state.config.ENABLE_LDAP_GROUP_CREATION = ENABLE_LDAP_GROUP_CREATION
 app.state.config.LDAP_ATTRIBUTE_FOR_GROUPS = LDAP_ATTRIBUTE_FOR_GROUPS
 
+# Aimbience Configuration
+app.state.config.ENABLE_AIMBENCE = ENABLE_AIMBENCE
+app.state.config.AIMBENCE_API_BASE_URL = AIMBENCE_API_BASE_URL
+app.state.config.AIMBENCE_API_KEY = AIMBENCE_API_KEY
+app.state.config.AIMBENCE_TIMEOUT = AIMBENCE_TIMEOUT
+app.state.config.AIMBENCE_BATCH_SIZE = AIMBENCE_BATCH_SIZE
 
 app.state.AUTH_TRUSTED_EMAIL_HEADER = WEBUI_AUTH_TRUSTED_EMAIL_HEADER
 app.state.AUTH_TRUSTED_NAME_HEADER = WEBUI_AUTH_TRUSTED_NAME_HEADER
@@ -842,7 +846,6 @@ app.state.config.EXTERNAL_DOCUMENT_LOADER_URL = EXTERNAL_DOCUMENT_LOADER_URL
 app.state.config.EXTERNAL_DOCUMENT_LOADER_API_KEY = EXTERNAL_DOCUMENT_LOADER_API_KEY
 app.state.config.TIKA_SERVER_URL = TIKA_SERVER_URL
 app.state.config.DOCLING_SERVER_URL = DOCLING_SERVER_URL
-app.state.config.DOCLING_PARAMS = DOCLING_PARAMS
 app.state.config.DOCLING_DO_OCR = DOCLING_DO_OCR
 app.state.config.DOCLING_FORCE_OCR = DOCLING_FORCE_OCR
 app.state.config.DOCLING_OCR_ENGINE = DOCLING_OCR_ENGINE
@@ -857,10 +860,6 @@ app.state.config.DOCLING_PICTURE_DESCRIPTION_API = DOCLING_PICTURE_DESCRIPTION_A
 app.state.config.DOCUMENT_INTELLIGENCE_ENDPOINT = DOCUMENT_INTELLIGENCE_ENDPOINT
 app.state.config.DOCUMENT_INTELLIGENCE_KEY = DOCUMENT_INTELLIGENCE_KEY
 app.state.config.MISTRAL_OCR_API_KEY = MISTRAL_OCR_API_KEY
-app.state.config.MINERU_API_MODE = MINERU_API_MODE
-app.state.config.MINERU_API_URL = MINERU_API_URL
-app.state.config.MINERU_API_KEY = MINERU_API_KEY
-app.state.config.MINERU_PARAMS = MINERU_PARAMS
 
 app.state.config.TEXT_SPLITTER = RAG_TEXT_SPLITTER
 app.state.config.TIKTOKEN_ENCODING_NAME = TIKTOKEN_ENCODING_NAME
@@ -1108,15 +1107,11 @@ app.state.config.AUDIO_STT_AZURE_LOCALES = AUDIO_STT_AZURE_LOCALES
 app.state.config.AUDIO_STT_AZURE_BASE_URL = AUDIO_STT_AZURE_BASE_URL
 app.state.config.AUDIO_STT_AZURE_MAX_SPEAKERS = AUDIO_STT_AZURE_MAX_SPEAKERS
 
-app.state.config.TTS_ENGINE = AUDIO_TTS_ENGINE
-
-app.state.config.TTS_MODEL = AUDIO_TTS_MODEL
-app.state.config.TTS_VOICE = AUDIO_TTS_VOICE
-
 app.state.config.TTS_OPENAI_API_BASE_URL = AUDIO_TTS_OPENAI_API_BASE_URL
 app.state.config.TTS_OPENAI_API_KEY = AUDIO_TTS_OPENAI_API_KEY
-app.state.config.TTS_OPENAI_PARAMS = AUDIO_TTS_OPENAI_PARAMS
-
+app.state.config.TTS_ENGINE = AUDIO_TTS_ENGINE
+app.state.config.TTS_MODEL = AUDIO_TTS_MODEL
+app.state.config.TTS_VOICE = AUDIO_TTS_VOICE
 app.state.config.TTS_API_KEY = AUDIO_TTS_API_KEY
 app.state.config.TTS_SPLIT_ON = AUDIO_TTS_SPLIT_ON
 
@@ -1187,32 +1182,12 @@ class RedirectMiddleware(BaseHTTPMiddleware):
             path = request.url.path
             query_params = dict(parse_qs(urlparse(str(request.url)).query))
 
-            redirect_params = {}
-
             # Check for the specific watch path and the presence of 'v' parameter
             if path.endswith("/watch") and "v" in query_params:
                 # Extract the first 'v' parameter
-                youtube_video_id = query_params["v"][0]
-                redirect_params["youtube"] = youtube_video_id
-
-            if "shared" in query_params and len(query_params["shared"]) > 0:
-                # PWA share_target support
-
-                text = query_params["shared"][0]
-                if text:
-                    urls = re.match(r"https://\S+", text)
-                    if urls:
-                        from open_webui.retrieval.loaders.youtube import _parse_video_id
-
-                        if youtube_video_id := _parse_video_id(urls[0]):
-                            redirect_params["youtube"] = youtube_video_id
-                        else:
-                            redirect_params["load-url"] = urls[0]
-                    else:
-                        redirect_params["q"] = text
-
-            if redirect_params:
-                redirect_url = f"/?{urlencode(redirect_params)}"
+                video_id = query_params["v"][0]
+                encoded_video_id = urlencode({"youtube": video_id})
+                redirect_url = f"/?{encoded_video_id}"
                 return RedirectResponse(url=redirect_url)
 
         # Proceed with the normal flow of other requests
@@ -1511,7 +1486,7 @@ async def chat_completion(
         }
 
         if metadata.get("chat_id") and (user and user.role != "admin"):
-            if not metadata["chat_id"].startswith("local:"):
+            if metadata["chat_id"] != "local":
                 chat = Chats.get_chat_by_id_and_user_id(metadata["chat_id"], user.id)
                 if chat is None:
                     raise HTTPException(
@@ -1538,14 +1513,13 @@ async def chat_completion(
             response = await chat_completion_handler(request, form_data, user)
             if metadata.get("chat_id") and metadata.get("message_id"):
                 try:
-                    if not metadata["chat_id"].startswith("local:"):
-                        Chats.upsert_message_to_chat_by_id_and_message_id(
-                            metadata["chat_id"],
-                            metadata["message_id"],
-                            {
-                                "model": model_id,
-                            },
-                        )
+                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                        metadata["chat_id"],
+                        metadata["message_id"],
+                        {
+                            "model": model_id,
+                        },
+                    )
                 except:
                     pass
 
@@ -1566,14 +1540,13 @@ async def chat_completion(
             if metadata.get("chat_id") and metadata.get("message_id"):
                 # Update the chat message with the error
                 try:
-                    if not metadata["chat_id"].startswith("local:"):
-                        Chats.upsert_message_to_chat_by_id_and_message_id(
-                            metadata["chat_id"],
-                            metadata["message_id"],
-                            {
-                                "error": {"content": str(e)},
-                            },
-                        )
+                    Chats.upsert_message_to_chat_by_id_and_message_id(
+                        metadata["chat_id"],
+                        metadata["message_id"],
+                        {
+                            "error": {"content": str(e)},
+                        },
+                    )
 
                     event_emitter = get_event_emitter(metadata)
                     await event_emitter(
@@ -1591,7 +1564,7 @@ async def chat_completion(
         finally:
             try:
                 if mcp_clients := metadata.get("mcp_clients"):
-                    for client in mcp_clients.values():
+                    for client in mcp_clients:
                         await client.disconnect()
             except Exception as e:
                 log.debug(f"Error cleaning up: {e}")
@@ -1942,44 +1915,42 @@ if len(app.state.config.TOOL_SERVER_CONNECTIONS) > 0:
                     "oauth_client_info", ""
                 )
 
-                try:
-                    oauth_client_info = decrypt_data(oauth_client_info)
-                    app.state.oauth_client_manager.add_client(
-                        f"mcp:{server_id}",
-                        OAuthClientInformationFull(**oauth_client_info),
-                    )
-                except Exception as e:
-                    log.error(
-                        f"Error adding OAuth client for MCP tool server {server_id}: {e}"
-                    )
-                    pass
+                oauth_client_info = decrypt_data(oauth_client_info)
+                app.state.oauth_client_manager.add_client(
+                    f"mcp:{server_id}", OAuthClientInformationFull(**oauth_client_info)
+                )
 
-try:
-    if ENABLE_STAR_SESSIONS_MIDDLEWARE:
-        redis_session_store = RedisStore(
-            url=REDIS_URL,
-            prefix=(f"{REDIS_KEY_PREFIX}:session:" if REDIS_KEY_PREFIX else "session:"),
-        )
 
-        app.add_middleware(SessionAutoloadMiddleware)
+# SessionMiddleware is used by authlib for oauth
+if len(OAUTH_PROVIDERS) > 0:
+    try:
+        if REDIS_URL:
+            redis_session_store = RedisStore(
+                url=REDIS_URL,
+                prefix=(
+                    f"{REDIS_KEY_PREFIX}:session:" if REDIS_KEY_PREFIX else "session:"
+                ),
+            )
+
+            app.add_middleware(SessionAutoloadMiddleware)
+            app.add_middleware(
+                StarSessionsMiddleware,
+                store=redis_session_store,
+                cookie_name="oui-session",
+                cookie_same_site=WEBUI_SESSION_COOKIE_SAME_SITE,
+                cookie_https_only=WEBUI_SESSION_COOKIE_SECURE,
+            )
+            log.info("Using Redis for session")
+        else:
+            raise ValueError("No Redis URL provided")
+    except Exception as e:
         app.add_middleware(
-            StarSessionsMiddleware,
-            store=redis_session_store,
-            cookie_name="owui-session",
-            cookie_same_site=WEBUI_SESSION_COOKIE_SAME_SITE,
-            cookie_https_only=WEBUI_SESSION_COOKIE_SECURE,
+            SessionMiddleware,
+            secret_key=WEBUI_SECRET_KEY,
+            session_cookie="oui-session",
+            same_site=WEBUI_SESSION_COOKIE_SAME_SITE,
+            https_only=WEBUI_SESSION_COOKIE_SECURE,
         )
-        log.info("Using Redis for session")
-    else:
-        raise ValueError("No Redis URL provided")
-except Exception as e:
-    app.add_middleware(
-        SessionMiddleware,
-        secret_key=WEBUI_SECRET_KEY,
-        session_cookie="owui-session",
-        same_site=WEBUI_SESSION_COOKIE_SAME_SITE,
-        https_only=WEBUI_SESSION_COOKIE_SECURE,
-    )
 
 
 @app.get("/oauth/clients/{client_id}/authorize")
@@ -2050,11 +2021,6 @@ async def get_manifest_json():
                     "purpose": "maskable",
                 },
             ],
-            "share_target": {
-                "action": "/",
-                "method": "GET",
-                "params": {"text": "shared"},
-            },
         }
 
 

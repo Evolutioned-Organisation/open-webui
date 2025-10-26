@@ -82,6 +82,61 @@ export const updateAdminConfig = async (token: string, body: object) => {
 	return res;
 };
 
+export const getAimbienceConfig = async (token: string) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/admin/config/aimbience`, {
+		method: 'GET',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err.detail;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const updateAimbienceConfig = async (token: string, body: object) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/admin/config/aimbience`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(body)
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err.detail;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
 export const getSessionUser = async (token: string) => {
 	let error = null;
 
@@ -694,5 +749,165 @@ export const deleteAPIKey = async (token: string) => {
 	if (error) {
 		throw error;
 	}
+	return res;
+};
+
+export const getInstalledPackages = async (token: string) => {
+	let error = null;
+
+	console.log('🔍 getInstalledPackages called with token:', !!token, 'length:', token?.length || 0);
+
+	const res = await fetch(
+		`/api/v1/auths/admin/aimbience/proxy/api/v1/workflows/packages/installed`,
+		{
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			}
+		}
+	)
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err.detail;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const getAvailablePackages = async (token: string) => {
+	let error = null;
+
+	console.log('🔍 getAvailablePackages called with token:', !!token, 'length:', token?.length || 0);
+
+	// Since we're not doing complex package management anymore,
+	// just return the installed packages as "available"
+	const res = await fetch(
+		`/api/v1/auths/admin/aimbience/proxy/api/v1/workflows/packages/installed`,
+		{
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${token}`
+			}
+		}
+	)
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err.detail;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const updatePackage = async (
+	token: string,
+	packageName: string,
+	version: string,
+	url?: string
+) => {
+	let error = null;
+
+	console.log('🔍 updatePackage called with:', { packageName, version, url });
+
+	// Since we're not doing runtime package updates anymore,
+	// return a message indicating restart is required
+	return {
+		success: false,
+		message:
+			'Package updates require service restart. Please restart the AIMBY API service to get the latest packages.',
+		detail: 'Runtime package updates are not supported. Packages are installed at build time.'
+	};
+};
+
+export const checkTaskStatus = async (token: string, taskId: string): Promise<any> => {
+	let error = null;
+
+	console.log('🔍 checkTaskStatus called with:', { taskId, token: !!token });
+
+	// Since we're not doing async package updates anymore,
+	// return a completed status with restart message
+	return {
+		task_id: taskId,
+		status: 'completed',
+		message:
+			'Package updates require service restart. Please restart the AIMBY API service to get the latest packages.',
+		detail: 'Runtime package updates are not supported. Packages are installed at build time.'
+	};
+};
+
+export const syncWorkflows = async (token: string) => {
+	let error = null;
+
+	console.log('🔍 syncWorkflows called with token:', !!token, 'length:', token?.length || 0);
+
+	const res = await fetch(`/api/v1/auths/admin/aimbience/proxy/workflows`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err.detail;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const getWorkflowsStatus = async (token: string) => {
+	let error = null;
+
+	console.log('🔍 getWorkflowsStatus called with token:', !!token, 'length:', token?.length || 0);
+
+	const res = await fetch(`/api/v1/auths/admin/aimbience/proxy/workflows`, {
+		method: 'GET',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await res.json();
+			return res.json();
+		})
+		.catch((err) => {
+			console.error(err);
+			error = err.detail;
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
 	return res;
 };

@@ -307,14 +307,8 @@ API_KEY_ALLOWED_ENDPOINTS = PersistentConfig(
 
 
 JWT_EXPIRES_IN = PersistentConfig(
-    "JWT_EXPIRES_IN", "auth.jwt_expiry", os.environ.get("JWT_EXPIRES_IN", "4w")
+    "JWT_EXPIRES_IN", "auth.jwt_expiry", os.environ.get("JWT_EXPIRES_IN", "-1")
 )
-
-if JWT_EXPIRES_IN.value == "-1":
-    log.warning(
-        "⚠️  SECURITY WARNING: JWT_EXPIRES_IN is set to '-1'\n"
-        "    See: https://docs.openwebui.com/getting-started/env-configuration\n"
-    )
 
 ####################################
 # OAuth config
@@ -611,8 +605,8 @@ def load_oauth_providers():
     OAUTH_PROVIDERS.clear()
     if GOOGLE_CLIENT_ID.value and GOOGLE_CLIENT_SECRET.value:
 
-        def google_oauth_register(oauth: OAuth):
-            client = oauth.register(
+        def google_oauth_register(client: OAuth):
+            client.register(
                 name="google",
                 client_id=GOOGLE_CLIENT_ID.value,
                 client_secret=GOOGLE_CLIENT_SECRET.value,
@@ -627,7 +621,6 @@ def load_oauth_providers():
                 },
                 redirect_uri=GOOGLE_REDIRECT_URI.value,
             )
-            return client
 
         OAUTH_PROVIDERS["google"] = {
             "redirect_uri": GOOGLE_REDIRECT_URI.value,
@@ -640,8 +633,8 @@ def load_oauth_providers():
         and MICROSOFT_CLIENT_TENANT_ID.value
     ):
 
-        def microsoft_oauth_register(oauth: OAuth):
-            client = oauth.register(
+        def microsoft_oauth_register(client: OAuth):
+            client.register(
                 name="microsoft",
                 client_id=MICROSOFT_CLIENT_ID.value,
                 client_secret=MICROSOFT_CLIENT_SECRET.value,
@@ -656,7 +649,6 @@ def load_oauth_providers():
                 },
                 redirect_uri=MICROSOFT_REDIRECT_URI.value,
             )
-            return client
 
         OAUTH_PROVIDERS["microsoft"] = {
             "redirect_uri": MICROSOFT_REDIRECT_URI.value,
@@ -666,8 +658,8 @@ def load_oauth_providers():
 
     if GITHUB_CLIENT_ID.value and GITHUB_CLIENT_SECRET.value:
 
-        def github_oauth_register(oauth: OAuth):
-            client = oauth.register(
+        def github_oauth_register(client: OAuth):
+            client.register(
                 name="github",
                 client_id=GITHUB_CLIENT_ID.value,
                 client_secret=GITHUB_CLIENT_SECRET.value,
@@ -685,7 +677,6 @@ def load_oauth_providers():
                 },
                 redirect_uri=GITHUB_CLIENT_REDIRECT_URI.value,
             )
-            return client
 
         OAUTH_PROVIDERS["github"] = {
             "redirect_uri": GITHUB_CLIENT_REDIRECT_URI.value,
@@ -699,7 +690,7 @@ def load_oauth_providers():
         and OPENID_PROVIDER_URL.value
     ):
 
-        def oidc_oauth_register(oauth: OAuth):
+        def oidc_oauth_register(client: OAuth):
             client_kwargs = {
                 "scope": OAUTH_SCOPES.value,
                 **(
@@ -725,7 +716,7 @@ def load_oauth_providers():
                     % ("S256", OAUTH_CODE_CHALLENGE_METHOD.value)
                 )
 
-            client = oauth.register(
+            client.register(
                 name="oidc",
                 client_id=OAUTH_CLIENT_ID.value,
                 client_secret=OAUTH_CLIENT_SECRET.value,
@@ -733,7 +724,6 @@ def load_oauth_providers():
                 client_kwargs=client_kwargs,
                 redirect_uri=OPENID_REDIRECT_URI.value,
             )
-            return client
 
         OAUTH_PROVIDERS["oidc"] = {
             "name": OAUTH_PROVIDER_NAME.value,
@@ -743,8 +733,8 @@ def load_oauth_providers():
 
     if FEISHU_CLIENT_ID.value and FEISHU_CLIENT_SECRET.value:
 
-        def feishu_oauth_register(oauth: OAuth):
-            client = oauth.register(
+        def feishu_oauth_register(client: OAuth):
+            client.register(
                 name="feishu",
                 client_id=FEISHU_CLIENT_ID.value,
                 client_secret=FEISHU_CLIENT_SECRET.value,
@@ -762,7 +752,6 @@ def load_oauth_providers():
                 },
                 redirect_uri=FEISHU_REDIRECT_URI.value,
             )
-            return client
 
         OAUTH_PROVIDERS["feishu"] = {
             "register": feishu_oauth_register,
@@ -1228,11 +1217,6 @@ USER_PERMISSIONS_WORKSPACE_MODELS_ALLOW_PUBLIC_SHARING = (
     == "true"
 )
 
-USER_PERMISSIONS_NOTES_ALLOW_PUBLIC_SHARING = (
-    os.environ.get("USER_PERMISSIONS_NOTES_ALLOW_PUBLIC_SHARING", "False").lower()
-    == "true"
-)
-
 USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ALLOW_PUBLIC_SHARING = (
     os.environ.get(
         "USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ALLOW_PUBLIC_SHARING", "False"
@@ -1370,7 +1354,6 @@ DEFAULT_USER_PERMISSIONS = {
         "public_knowledge": USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ALLOW_PUBLIC_SHARING,
         "public_prompts": USER_PERMISSIONS_WORKSPACE_PROMPTS_ALLOW_PUBLIC_SHARING,
         "public_tools": USER_PERMISSIONS_WORKSPACE_TOOLS_ALLOW_PUBLIC_SHARING,
-        "public_notes": USER_PERMISSIONS_NOTES_ALLOW_PUBLIC_SHARING,
     },
     "chat": {
         "controls": USER_PERMISSIONS_CHAT_CONTROLS,
@@ -1671,7 +1654,7 @@ FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
 DEFAULT_FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = """### Task:
 Suggest 3-5 relevant follow-up questions or prompts that the user might naturally ask next in this conversation as a **user**, based on the chat history, to help continue or deepen the discussion.
 ### Guidelines:
-- Write all follow-up questions from the user’s point of view, directed to the assistant.
+- Write all follow-up questions from the user's point of view, directed to the assistant.
 - Make questions concise, clear, and directly related to the discussed topic(s).
 - Only suggest follow-ups that make sense given the chat content and do not repeat what was already covered.
 - If the conversation is very short or not specific, suggest more general (but relevant) follow-ups the user might ask.
@@ -2016,23 +1999,16 @@ if VECTOR_DB == "chroma":
 # this uses the model defined in the Dockerfile ENV variable. If you dont use docker or docker based deployments such as k8s, the default embedding model will be used (sentence-transformers/all-MiniLM-L6-v2)
 
 # Milvus
+
 MILVUS_URI = os.environ.get("MILVUS_URI", f"{DATA_DIR}/vector_db/milvus.db")
 MILVUS_DB = os.environ.get("MILVUS_DB", "default")
 MILVUS_TOKEN = os.environ.get("MILVUS_TOKEN", None)
+
 MILVUS_INDEX_TYPE = os.environ.get("MILVUS_INDEX_TYPE", "HNSW")
 MILVUS_METRIC_TYPE = os.environ.get("MILVUS_METRIC_TYPE", "COSINE")
 MILVUS_HNSW_M = int(os.environ.get("MILVUS_HNSW_M", "16"))
 MILVUS_HNSW_EFCONSTRUCTION = int(os.environ.get("MILVUS_HNSW_EFCONSTRUCTION", "100"))
 MILVUS_IVF_FLAT_NLIST = int(os.environ.get("MILVUS_IVF_FLAT_NLIST", "128"))
-MILVUS_DISKANN_MAX_DEGREE = int(os.environ.get("MILVUS_DISKANN_MAX_DEGREE", "56"))
-MILVUS_DISKANN_SEARCH_LIST_SIZE = int(
-    os.environ.get("MILVUS_DISKANN_SEARCH_LIST_SIZE", "100")
-)
-ENABLE_MILVUS_MULTITENANCY_MODE = (
-    os.environ.get("ENABLE_MILVUS_MULTITENANCY_MODE", "false").lower() == "true"
-)
-# Hyphens not allowed, need to use underscores in collection names
-MILVUS_COLLECTION_PREFIX = os.environ.get("MILVUS_COLLECTION_PREFIX", "open_webui")
 
 # Qdrant
 QDRANT_URI = os.environ.get("QDRANT_URI", None)
@@ -2297,36 +2273,6 @@ DATALAB_MARKER_OUTPUT_FORMAT = PersistentConfig(
     os.environ.get("DATALAB_MARKER_OUTPUT_FORMAT", "markdown"),
 )
 
-MINERU_API_MODE = PersistentConfig(
-    "MINERU_API_MODE",
-    "rag.mineru_api_mode",
-    os.environ.get("MINERU_API_MODE", "local"),  # "local" or "cloud"
-)
-
-MINERU_API_URL = PersistentConfig(
-    "MINERU_API_URL",
-    "rag.mineru_api_url",
-    os.environ.get("MINERU_API_URL", "http://localhost:8000"),
-)
-
-MINERU_API_KEY = PersistentConfig(
-    "MINERU_API_KEY",
-    "rag.mineru_api_key",
-    os.environ.get("MINERU_API_KEY", ""),
-)
-
-mineru_params = os.getenv("MINERU_PARAMS", "")
-try:
-    mineru_params = json.loads(mineru_params)
-except json.JSONDecodeError:
-    mineru_params = {}
-
-MINERU_PARAMS = PersistentConfig(
-    "MINERU_PARAMS",
-    "rag.mineru_params",
-    mineru_params,
-)
-
 EXTERNAL_DOCUMENT_LOADER_URL = PersistentConfig(
     "EXTERNAL_DOCUMENT_LOADER_URL",
     "rag.external_document_loader_url",
@@ -2349,18 +2295,6 @@ DOCLING_SERVER_URL = PersistentConfig(
     "DOCLING_SERVER_URL",
     "rag.docling_server_url",
     os.getenv("DOCLING_SERVER_URL", "http://docling:5001"),
-)
-
-docling_params = os.getenv("DOCLING_PARAMS", "")
-try:
-    docling_params = json.loads(docling_params)
-except json.JSONDecodeError:
-    docling_params = {}
-
-DOCLING_PARAMS = PersistentConfig(
-    "DOCLING_PARAMS",
-    "rag.docling_params",
-    docling_params,
 )
 
 DOCLING_DO_OCR = PersistentConfig(
@@ -3414,19 +3348,6 @@ AUDIO_TTS_OPENAI_API_KEY = PersistentConfig(
     os.getenv("AUDIO_TTS_OPENAI_API_KEY", OPENAI_API_KEY),
 )
 
-audio_tts_openai_params = os.getenv("AUDIO_TTS_OPENAI_PARAMS", "")
-try:
-    audio_tts_openai_params = json.loads(audio_tts_openai_params)
-except json.JSONDecodeError:
-    audio_tts_openai_params = {}
-
-AUDIO_TTS_OPENAI_PARAMS = PersistentConfig(
-    "AUDIO_TTS_OPENAI_PARAMS",
-    "audio.tts.openai.params",
-    audio_tts_openai_params,
-)
-
-
 AUDIO_TTS_API_KEY = PersistentConfig(
     "AUDIO_TTS_API_KEY",
     "audio.tts.api_key",
@@ -3578,4 +3499,38 @@ LDAP_ATTRIBUTE_FOR_GROUPS = PersistentConfig(
     "LDAP_ATTRIBUTE_FOR_GROUPS",
     "ldap.server.attribute_for_groups",
     os.environ.get("LDAP_ATTRIBUTE_FOR_GROUPS", "memberOf"),
+)
+
+####################################
+# Aimbience
+####################################
+
+ENABLE_AIMBENCE = PersistentConfig(
+    "ENABLE_AIMBENCE",
+    "aimbience.enable",
+    os.environ.get("ENABLE_AIMBENCE", "false").lower() == "true",
+)
+
+AIMBENCE_API_BASE_URL = PersistentConfig(
+    "AIMBENCE_API_BASE_URL",
+    "aimbience.api.base_url",
+    os.environ.get("AIMBENCE_API_BASE_URL", "http://localhost:8000"),
+)
+
+AIMBENCE_API_KEY = PersistentConfig(
+    "AIMBENCE_API_KEY",
+    "aimbience.api.key",
+    os.environ.get("AIMBENCE_API_KEY", ""),
+)
+
+AIMBENCE_TIMEOUT = PersistentConfig(
+    "AIMBENCE_TIMEOUT",
+    "aimbience.api.timeout",
+    int(os.environ.get("AIMBENCE_TIMEOUT", "30")),
+)
+
+AIMBENCE_BATCH_SIZE = PersistentConfig(
+    "AIMBENCE_BATCH_SIZE",
+    "aimbience.api.batch_size",
+    int(os.environ.get("AIMBENCE_BATCH_SIZE", "10")),
 )
