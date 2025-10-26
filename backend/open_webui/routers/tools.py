@@ -1,5 +1,4 @@
 import logging
-import sys
 from pathlib import Path
 from typing import Optional
 import time
@@ -18,11 +17,12 @@ from open_webui.models.tools import (
     ToolUserResponse,
     Tools,
 )
-from open_webui.utils.plugin import load_tool_module_by_id, replace_imports
-from open_webui.config import CACHE_DIR, ENABLE_ADMIN_WORKSPACE_CONTENT_ACCESS
-from open_webui.constants import ERROR_MESSAGES
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from open_webui.utils.tools import get_tool_specs, get_tools
+from open_webui.utils.plugin import (
+    load_tool_module_by_id,
+    replace_imports,
+    get_tool_module_from_cache,
+)
+from open_webui.utils.tools import get_tool_specs
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.access_control import has_access, has_permission
 from open_webui.utils.tools import get_tool_servers
@@ -39,6 +39,14 @@ log.setLevel(SRC_LOG_LEVELS["MAIN"])
 router = APIRouter()
 
 
+def get_tool_module(request, tool_id, load_from_db=True):
+    """
+    Get the tool module by its ID.
+    """
+    tool_module, _ = get_tool_module_from_cache(request, tool_id, load_from_db)
+    return tool_module
+
+
 ############################
 # GetTools
 ############################
@@ -46,15 +54,19 @@ router = APIRouter()
 
 @router.get("/", response_model=list[ToolUserResponse])
 async def get_tools(request: Request, user=Depends(get_verified_user)):
-    tools = [
-        ToolUserResponse(
-            **{
-                **tool.model_dump(),
-                "has_user_valves": "class UserValves(BaseModel):" in tool.content,
-            }
+    tools = []
+
+    # Local Tools
+    for tool in Tools.get_tools():
+        tool_module = get_tool_module(request, tool.id)
+        tools.append(
+            ToolUserResponse(
+                **{
+                    **tool.model_dump(),
+                    "has_user_valves": hasattr(tool_module, "UserValves"),
+                }
+            )
         )
-        for tool in Tools.get_tools()
-    ]
 
     # OpenAPI Tool Servers
     for server in await get_tool_servers(request):
@@ -617,108 +629,4 @@ async def update_tools_user_valves_by_id(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.NOT_FOUND,
-        )
-
-
-############################
-# ExecuteTool
-############################
-
-
-class ToolExecuteRequest(BaseModel):
-    tool_id: str
-    function_name: str
-    parameters: dict = {}
-
-
-@router.post("/execute", response_model=dict)
-async def execute_tool(
-    request: Request,
-    form_data: ToolExecuteRequest,
-    user=Depends(get_verified_user)
-):
-    """
-    Execute a specific tool function with parameters.
-    
-    This endpoint allows direct execution of tool functions for administrative purposes.
-    Only admin users can execute tools.
-    """
-    if user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=ERROR_MESSAGES.UNAUTHORIZED,
-        )
-    
-    try:
-        # Get the tool
-        tool = Tools.get_tool_by_id(form_data.tool_id)
-        if not tool:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Tool '{form_data.tool_id}' not found",
-            )
-        
-        # Load the tool module (force reload to get latest version)
-        TOOLS = request.app.state.TOOLS
-        
-        # Clear any cached module to force reload
-        module_name = f"tool_{form_data.tool_id}"
-        if module_name in sys.modules:
-            del sys.modules[module_name]
-        
-        module, _ = load_tool_module_by_id(form_data.tool_id)
-        TOOLS[form_data.tool_id] = module
-        
-        tool_module = TOOLS[form_data.tool_id]
-        
-        # Check if the function exists
-        if not hasattr(tool_module, form_data.function_name):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Function '{form_data.function_name}' not found in tool '{form_data.tool_id}'",
-            )
-        
-        # Get the function
-        tool_function = getattr(tool_module, form_data.function_name)
-        
-        # Set up extra parameters
-        extra_params = {
-            "__id__": form_data.tool_id,
-            "__user__": {
-                "id": user.id,
-                "role": user.role,
-                "email": user.email
-            }
-        }
-        
-        # Set valves for the tool
-        if hasattr(tool_module, "valves") and hasattr(tool_module, "Valves"):
-            from open_webui.utils.tools import Tools as ToolsUtil
-            valves = ToolsUtil.get_tool_valves_by_id(form_data.tool_id) or {}
-            tool_module.valves = tool_module.Valves(**valves)
-        
-        if hasattr(tool_module, "UserValves"):
-            from open_webui.utils.tools import Tools as ToolsUtil
-            extra_params["__user__"]["valves"] = tool_module.UserValves(
-                **ToolsUtil.get_user_valves_by_id_and_user_id(form_data.tool_id, user.id)
-            )
-        
-        # Execute the function with both parameters and extra params
-        all_params = {**extra_params, **form_data.parameters}
-        result = await tool_function(**all_params)
-        
-        return {
-            "success": True,
-            "result": result,
-            "tool_id": form_data.tool_id,
-            "function_name": form_data.function_name
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.exception(f"Error executing tool {form_data.tool_id}.{form_data.function_name}: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error executing tool: {str(e)}",
         )
