@@ -17,17 +17,42 @@ depends_on = None
 
 def upgrade():
     # Chat table indexes
-    op.create_index("folder_id_idx", "chat", ["folder_id"])
-    op.create_index("user_id_pinned_idx", "chat", ["user_id", "pinned"])
-    op.create_index("user_id_archived_idx", "chat", ["user_id", "archived"])
-    op.create_index("updated_at_user_id_idx", "chat", ["updated_at", "user_id"])
-    op.create_index("folder_id_user_id_idx", "chat", ["folder_id", "user_id"])
+    try:
+        op.create_index("folder_id_idx", "chat", ["folder_id"])
+    except Exception:
+        pass  # Index already exists
+    
+    try:
+        op.create_index("user_id_pinned_idx", "chat", ["user_id", "pinned"])
+    except Exception:
+        pass  # Index already exists
+    
+    try:
+        op.create_index("user_id_archived_idx", "chat", ["user_id", "archived"])
+    except Exception:
+        pass  # Index already exists
+    
+    try:
+        op.create_index("updated_at_user_id_idx", "chat", ["updated_at", "user_id"])
+    except Exception:
+        pass  # Index already exists
+    
+    try:
+        op.create_index("folder_id_user_id_idx", "chat", ["folder_id", "user_id"])
+    except Exception:
+        pass  # Index already exists
 
     # Tag table index
-    op.create_index("user_id_idx", "tag", ["user_id"])
+    try:
+        op.create_index("user_id_idx", "tag", ["user_id"])
+    except Exception:
+        pass  # Index already exists
 
     # Function table index
-    op.create_index("is_global_idx", "function", ["is_global"])
+    try:
+        op.create_index("is_global_idx", "function", ["is_global"])
+    except Exception:
+        pass  # Index already exists
 
 
 def downgrade():
