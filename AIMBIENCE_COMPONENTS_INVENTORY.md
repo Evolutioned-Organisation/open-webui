@@ -25,6 +25,7 @@ This document provides a comprehensive inventory of all AIMbience custom compone
 ## Overview
 
 AIMbience is a custom admin extension for Open-WebUI that provides:
+
 - Configuration management for AIMby API integration
 - Document ingestion and batch management
 - Workflow synchronization
@@ -324,6 +325,7 @@ const AIMBY_PROXY_BASE = '/api/v1/auths/admin/aimbience/proxy';
 **Response Model**: `AimbienceConfig`
 
 **Returns**:
+
 ```python
 {
     "ENABLE_AIMBENCE": bool,
@@ -367,6 +369,7 @@ const AIMBY_PROXY_BASE = '/api/v1/auths/admin/aimbience/proxy';
 **Purpose**: Proxies requests to AIMby API to avoid CORS issues
 
 **Features**:
+
 - Forwards all HTTP methods
 - Preserves query parameters
 - Adds authentication headers
@@ -376,6 +379,7 @@ const AIMBY_PROXY_BASE = '/api/v1/auths/admin/aimbience/proxy';
 **Location**: Lines 1117-1262 (approximately)
 
 **Key Implementation Details**:
+
 - Uses `httpx.AsyncClient` for async HTTP requests
 - Adds `Authorization: Bearer {api_key}` header when API key is present
 - Excludes authentication for public endpoints: `health`, `docs`, `openapi.json`
@@ -503,7 +507,8 @@ app.state.config.AIMBENCE_BATCH_SIZE = AIMBENCE_BATCH_SIZE
 
 **Integration**: Uses Open-WebUI's `PersistentConfig` system for database-backed configuration
 
-**Benefits**: 
+**Benefits**:
+
 - Configuration persists across restarts
 - Can be updated via API without code changes
 - Environment variable fallback support
@@ -546,6 +551,7 @@ These can be set via environment variables or configured through the admin UI:
 **Location**: `services/docker-compose.yaml`
 
 **Example**:
+
 ```yaml
 environment:
   ENABLE_AIMBENCE: "true"
@@ -570,12 +576,14 @@ environment:
 ### Upgrade Steps
 
 1. **Fetch Upstream**
+
    ```bash
    cd services/open-webui
    git fetch upstream
    ```
 
 2. **Merge Upstream Version**
+
    ```bash
    git merge v0.6.36  # or target version tag
    ```
@@ -589,6 +597,7 @@ environment:
      - `backend/open_webui/main.py` (app state init)
 
 4. **Verify Files Present**
+
    ```bash
    # Check frontend components
    ls -la src/lib/components/admin/Aimbience/
@@ -602,22 +611,26 @@ environment:
 
 5. **Reapply Features if Needed**
    - If files are missing, use backup branch:
+
    ```bash
    git show backup/aimbience-features-v0.6.34:path/to/file > path/to/file
    ```
 
 6. **Test Build**
+
    ```bash
    npm run build
    ```
 
 7. **Test Backend**
+
    ```bash
    # Start backend and check for errors
    python -m open_webui.main
    ```
 
 8. **Test Endpoints**
+
    ```bash
    # Test configuration endpoint
    curl http://localhost:8080/api/v1/auths/admin/config/aimbience
@@ -659,6 +672,7 @@ environment:
 **Solution**: Check `src/routes/(app)/admin/+layout.svelte` lines 97-102
 
 **Fix**:
+
 ```svelte
 <a
     class="min-w-fit p-1.5 {$page.url.pathname.includes('/admin/aimbience')
@@ -675,11 +689,13 @@ environment:
 **Symptom**: API endpoints return 404
 
 **Possible Causes**:
+
 - Backend routes not present in `auths.py`
 - Router not properly included
 - Backend not restarted after changes
 
-**Solution**: 
+**Solution**:
+
 1. Verify routes exist in `backend/open_webui/routers/auths.py`
 2. Restart backend
 3. Check backend logs for import errors
@@ -691,11 +707,13 @@ environment:
 **Symptom**: Configuration changes don't persist
 
 **Possible Causes**:
+
 - App state not initialized
 - PersistentConfig not working
 - Database connection issues
 
 **Solution**:
+
 1. Check `main.py` app state initialization
 2. Verify database connection
 3. Check backend logs for errors
@@ -707,11 +725,13 @@ environment:
 **Symptom**: Proxy requests fail with 500 error
 
 **Possible Causes**:
+
 - AIMby API not accessible
 - Invalid API key
 - Network connectivity issues
 
 **Solution**:
+
 1. Check AIMbience configuration (API base URL, key)
 2. Test AIMby API directly
 3. Check backend logs for detailed error messages
@@ -724,12 +744,14 @@ environment:
 **Symptom**: `npm run build` fails
 
 **Possible Causes**:
+
 - Missing component files
 - Import errors
 - TypeScript errors
 - Dependency issues
 
 **Solution**:
+
 1. Check for missing files in `src/lib/components/admin/Aimbience/`
 2. Verify all imports are correct
 3. Run `npm install` to update dependencies
@@ -742,12 +764,14 @@ environment:
 **Symptom**: Pages load but components are blank
 
 **Possible Causes**:
+
 - API client not working
 - Missing API endpoints
 - CORS issues
 - Authentication failures
 
 **Solution**:
+
 1. Check browser console for errors
 2. Verify API endpoints are accessible
 3. Check network tab for failed requests
@@ -767,6 +791,7 @@ environment:
    - Verify API responses
 
 3. **Test Endpoints Directly**
+
    ```bash
    # Get configuration
    curl -H "Authorization: Bearer YOUR_TOKEN" \
@@ -778,6 +803,7 @@ environment:
    ```
 
 4. **Verify File Presence**
+
    ```bash
    # List all AIMbience files
    find services/open-webui -type f -iname "*aimbience*" -o -iname "*aimbence*"
@@ -843,6 +869,7 @@ Use this checklist to verify all files are present after an upgrade:
 ## Support
 
 For issues or questions:
+
 1. Check this inventory document first
 2. Review troubleshooting section
 3. Check backend and frontend logs
@@ -854,4 +881,3 @@ For issues or questions:
 **Document Maintained By**: Development Team  
 **Last Review Date**: 2025-01-XX  
 **Next Review**: After v0.6.36 upgrade completion
-
