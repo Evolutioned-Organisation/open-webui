@@ -10,7 +10,25 @@ import re
 
 from urllib.parse import quote
 from huggingface_hub import snapshot_download
-from langchain.retrievers import ContextualCompressionRetriever, EnsembleRetriever
+# In langchain 0.3.x, retrievers are in submodules
+# Note: These classes were removed in langchain 1.x, so we need langchain 0.3.27 as specified in requirements.txt
+try:
+    from langchain.retrievers.contextual_compression import ContextualCompressionRetriever
+    from langchain.retrievers.ensemble import EnsembleRetriever
+except ImportError:
+    # Fallback: try direct import (older versions)
+    try:
+        from langchain.retrievers import ContextualCompressionRetriever, EnsembleRetriever
+    except ImportError:
+        # If still not found, check version and provide helpful error
+        import langchain
+        raise ImportError(
+            f"ContextualCompressionRetriever and EnsembleRetriever not found. "
+            f"Installed langchain version: {langchain.__version__}. "
+            f"These classes are only available in langchain 0.3.x. "
+            f"Please install langchain==0.3.27 as specified in requirements.txt: "
+            f"pip install langchain==0.3.27"
+        )
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 
