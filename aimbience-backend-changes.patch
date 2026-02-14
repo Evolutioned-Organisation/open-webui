@@ -1,0 +1,793 @@
+diff --git a/backend/open_webui/config.py b/backend/open_webui/config.py
+index f7926abe8..808aa7a55 100644
+--- a/backend/open_webui/config.py
++++ b/backend/open_webui/config.py
+@@ -307,15 +307,9 @@ API_KEY_ALLOWED_ENDPOINTS = PersistentConfig(
+ 
+ 
+ JWT_EXPIRES_IN = PersistentConfig(
+-    "JWT_EXPIRES_IN", "auth.jwt_expiry", os.environ.get("JWT_EXPIRES_IN", "4w")
++    "JWT_EXPIRES_IN", "auth.jwt_expiry", os.environ.get("JWT_EXPIRES_IN", "-1")
+ )
+ 
+-if JWT_EXPIRES_IN.value == "-1":
+-    log.warning(
+-        "⚠️  SECURITY WARNING: JWT_EXPIRES_IN is set to '-1'\n"
+-        "    See: https://docs.openwebui.com/getting-started/env-configuration\n"
+-    )
+-
+ ####################################
+ # OAuth config
+ ####################################
+@@ -611,8 +605,8 @@ def load_oauth_providers():
+     OAUTH_PROVIDERS.clear()
+     if GOOGLE_CLIENT_ID.value and GOOGLE_CLIENT_SECRET.value:
+ 
+-        def google_oauth_register(oauth: OAuth):
+-            client = oauth.register(
++        def google_oauth_register(client: OAuth):
++            client.register(
+                 name="google",
+                 client_id=GOOGLE_CLIENT_ID.value,
+                 client_secret=GOOGLE_CLIENT_SECRET.value,
+@@ -627,7 +621,6 @@ def load_oauth_providers():
+                 },
+                 redirect_uri=GOOGLE_REDIRECT_URI.value,
+             )
+-            return client
+ 
+         OAUTH_PROVIDERS["google"] = {
+             "redirect_uri": GOOGLE_REDIRECT_URI.value,
+@@ -640,8 +633,8 @@ def load_oauth_providers():
+         and MICROSOFT_CLIENT_TENANT_ID.value
+     ):
+ 
+-        def microsoft_oauth_register(oauth: OAuth):
+-            client = oauth.register(
++        def microsoft_oauth_register(client: OAuth):
++            client.register(
+                 name="microsoft",
+                 client_id=MICROSOFT_CLIENT_ID.value,
+                 client_secret=MICROSOFT_CLIENT_SECRET.value,
+@@ -656,7 +649,6 @@ def load_oauth_providers():
+                 },
+                 redirect_uri=MICROSOFT_REDIRECT_URI.value,
+             )
+-            return client
+ 
+         OAUTH_PROVIDERS["microsoft"] = {
+             "redirect_uri": MICROSOFT_REDIRECT_URI.value,
+@@ -666,8 +658,8 @@ def load_oauth_providers():
+ 
+     if GITHUB_CLIENT_ID.value and GITHUB_CLIENT_SECRET.value:
+ 
+-        def github_oauth_register(oauth: OAuth):
+-            client = oauth.register(
++        def github_oauth_register(client: OAuth):
++            client.register(
+                 name="github",
+                 client_id=GITHUB_CLIENT_ID.value,
+                 client_secret=GITHUB_CLIENT_SECRET.value,
+@@ -685,7 +677,6 @@ def load_oauth_providers():
+                 },
+                 redirect_uri=GITHUB_CLIENT_REDIRECT_URI.value,
+             )
+-            return client
+ 
+         OAUTH_PROVIDERS["github"] = {
+             "redirect_uri": GITHUB_CLIENT_REDIRECT_URI.value,
+@@ -699,7 +690,7 @@ def load_oauth_providers():
+         and OPENID_PROVIDER_URL.value
+     ):
+ 
+-        def oidc_oauth_register(oauth: OAuth):
++        def oidc_oauth_register(client: OAuth):
+             client_kwargs = {
+                 "scope": OAUTH_SCOPES.value,
+                 **(
+@@ -725,7 +716,7 @@ def load_oauth_providers():
+                     % ("S256", OAUTH_CODE_CHALLENGE_METHOD.value)
+                 )
+ 
+-            client = oauth.register(
++            client.register(
+                 name="oidc",
+                 client_id=OAUTH_CLIENT_ID.value,
+                 client_secret=OAUTH_CLIENT_SECRET.value,
+@@ -733,7 +724,6 @@ def load_oauth_providers():
+                 client_kwargs=client_kwargs,
+                 redirect_uri=OPENID_REDIRECT_URI.value,
+             )
+-            return client
+ 
+         OAUTH_PROVIDERS["oidc"] = {
+             "name": OAUTH_PROVIDER_NAME.value,
+@@ -743,8 +733,8 @@ def load_oauth_providers():
+ 
+     if FEISHU_CLIENT_ID.value and FEISHU_CLIENT_SECRET.value:
+ 
+-        def feishu_oauth_register(oauth: OAuth):
+-            client = oauth.register(
++        def feishu_oauth_register(client: OAuth):
++            client.register(
+                 name="feishu",
+                 client_id=FEISHU_CLIENT_ID.value,
+                 client_secret=FEISHU_CLIENT_SECRET.value,
+@@ -762,7 +752,6 @@ def load_oauth_providers():
+                 },
+                 redirect_uri=FEISHU_REDIRECT_URI.value,
+             )
+-            return client
+ 
+         OAUTH_PROVIDERS["feishu"] = {
+             "register": feishu_oauth_register,
+@@ -1228,11 +1217,6 @@ USER_PERMISSIONS_WORKSPACE_MODELS_ALLOW_PUBLIC_SHARING = (
+     == "true"
+ )
+ 
+-USER_PERMISSIONS_NOTES_ALLOW_PUBLIC_SHARING = (
+-    os.environ.get("USER_PERMISSIONS_NOTES_ALLOW_PUBLIC_SHARING", "False").lower()
+-    == "true"
+-)
+-
+ USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ALLOW_PUBLIC_SHARING = (
+     os.environ.get(
+         "USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ALLOW_PUBLIC_SHARING", "False"
+@@ -1370,7 +1354,6 @@ DEFAULT_USER_PERMISSIONS = {
+         "public_knowledge": USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ALLOW_PUBLIC_SHARING,
+         "public_prompts": USER_PERMISSIONS_WORKSPACE_PROMPTS_ALLOW_PUBLIC_SHARING,
+         "public_tools": USER_PERMISSIONS_WORKSPACE_TOOLS_ALLOW_PUBLIC_SHARING,
+-        "public_notes": USER_PERMISSIONS_NOTES_ALLOW_PUBLIC_SHARING,
+     },
+     "chat": {
+         "controls": USER_PERMISSIONS_CHAT_CONTROLS,
+@@ -1671,7 +1654,7 @@ FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
+ DEFAULT_FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = """### Task:
+ Suggest 3-5 relevant follow-up questions or prompts that the user might naturally ask next in this conversation as a **user**, based on the chat history, to help continue or deepen the discussion.
+ ### Guidelines:
+-- Write all follow-up questions from the user’s point of view, directed to the assistant.
++- Write all follow-up questions from the user's point of view, directed to the assistant.
+ - Make questions concise, clear, and directly related to the discussed topic(s).
+ - Only suggest follow-ups that make sense given the chat content and do not repeat what was already covered.
+ - If the conversation is very short or not specific, suggest more general (but relevant) follow-ups the user might ask.
+@@ -2016,23 +1999,16 @@ if VECTOR_DB == "chroma":
+ # this uses the model defined in the Dockerfile ENV variable. If you dont use docker or docker based deployments such as k8s, the default embedding model will be used (sentence-transformers/all-MiniLM-L6-v2)
+ 
+ # Milvus
++
+ MILVUS_URI = os.environ.get("MILVUS_URI", f"{DATA_DIR}/vector_db/milvus.db")
+ MILVUS_DB = os.environ.get("MILVUS_DB", "default")
+ MILVUS_TOKEN = os.environ.get("MILVUS_TOKEN", None)
++
+ MILVUS_INDEX_TYPE = os.environ.get("MILVUS_INDEX_TYPE", "HNSW")
+ MILVUS_METRIC_TYPE = os.environ.get("MILVUS_METRIC_TYPE", "COSINE")
+ MILVUS_HNSW_M = int(os.environ.get("MILVUS_HNSW_M", "16"))
+ MILVUS_HNSW_EFCONSTRUCTION = int(os.environ.get("MILVUS_HNSW_EFCONSTRUCTION", "100"))
+ MILVUS_IVF_FLAT_NLIST = int(os.environ.get("MILVUS_IVF_FLAT_NLIST", "128"))
+-MILVUS_DISKANN_MAX_DEGREE = int(os.environ.get("MILVUS_DISKANN_MAX_DEGREE", "56"))
+-MILVUS_DISKANN_SEARCH_LIST_SIZE = int(
+-    os.environ.get("MILVUS_DISKANN_SEARCH_LIST_SIZE", "100")
+-)
+-ENABLE_MILVUS_MULTITENANCY_MODE = (
+-    os.environ.get("ENABLE_MILVUS_MULTITENANCY_MODE", "false").lower() == "true"
+-)
+-# Hyphens not allowed, need to use underscores in collection names
+-MILVUS_COLLECTION_PREFIX = os.environ.get("MILVUS_COLLECTION_PREFIX", "open_webui")
+ 
+ # Qdrant
+ QDRANT_URI = os.environ.get("QDRANT_URI", None)
+@@ -2297,36 +2273,6 @@ DATALAB_MARKER_OUTPUT_FORMAT = PersistentConfig(
+     os.environ.get("DATALAB_MARKER_OUTPUT_FORMAT", "markdown"),
+ )
+ 
+-MINERU_API_MODE = PersistentConfig(
+-    "MINERU_API_MODE",
+-    "rag.mineru_api_mode",
+-    os.environ.get("MINERU_API_MODE", "local"),  # "local" or "cloud"
+-)
+-
+-MINERU_API_URL = PersistentConfig(
+-    "MINERU_API_URL",
+-    "rag.mineru_api_url",
+-    os.environ.get("MINERU_API_URL", "http://localhost:8000"),
+-)
+-
+-MINERU_API_KEY = PersistentConfig(
+-    "MINERU_API_KEY",
+-    "rag.mineru_api_key",
+-    os.environ.get("MINERU_API_KEY", ""),
+-)
+-
+-mineru_params = os.getenv("MINERU_PARAMS", "")
+-try:
+-    mineru_params = json.loads(mineru_params)
+-except json.JSONDecodeError:
+-    mineru_params = {}
+-
+-MINERU_PARAMS = PersistentConfig(
+-    "MINERU_PARAMS",
+-    "rag.mineru_params",
+-    mineru_params,
+-)
+-
+ EXTERNAL_DOCUMENT_LOADER_URL = PersistentConfig(
+     "EXTERNAL_DOCUMENT_LOADER_URL",
+     "rag.external_document_loader_url",
+@@ -2351,18 +2297,6 @@ DOCLING_SERVER_URL = PersistentConfig(
+     os.getenv("DOCLING_SERVER_URL", "http://docling:5001"),
+ )
+ 
+-docling_params = os.getenv("DOCLING_PARAMS", "")
+-try:
+-    docling_params = json.loads(docling_params)
+-except json.JSONDecodeError:
+-    docling_params = {}
+-
+-DOCLING_PARAMS = PersistentConfig(
+-    "DOCLING_PARAMS",
+-    "rag.docling_params",
+-    docling_params,
+-)
+-
+ DOCLING_DO_OCR = PersistentConfig(
+     "DOCLING_DO_OCR",
+     "rag.docling_do_ocr",
+@@ -3414,19 +3348,6 @@ AUDIO_TTS_OPENAI_API_KEY = PersistentConfig(
+     os.getenv("AUDIO_TTS_OPENAI_API_KEY", OPENAI_API_KEY),
+ )
+ 
+-audio_tts_openai_params = os.getenv("AUDIO_TTS_OPENAI_PARAMS", "")
+-try:
+-    audio_tts_openai_params = json.loads(audio_tts_openai_params)
+-except json.JSONDecodeError:
+-    audio_tts_openai_params = {}
+-
+-AUDIO_TTS_OPENAI_PARAMS = PersistentConfig(
+-    "AUDIO_TTS_OPENAI_PARAMS",
+-    "audio.tts.openai.params",
+-    audio_tts_openai_params,
+-)
+-
+-
+ AUDIO_TTS_API_KEY = PersistentConfig(
+     "AUDIO_TTS_API_KEY",
+     "audio.tts.api_key",
+@@ -3579,3 +3500,37 @@ LDAP_ATTRIBUTE_FOR_GROUPS = PersistentConfig(
+     "ldap.server.attribute_for_groups",
+     os.environ.get("LDAP_ATTRIBUTE_FOR_GROUPS", "memberOf"),
+ )
++
++####################################
++# Aimbience
++####################################
++
++ENABLE_AIMBENCE = PersistentConfig(
++    "ENABLE_AIMBENCE",
++    "aimbience.enable",
++    os.environ.get("ENABLE_AIMBENCE", "false").lower() == "true",
++)
++
++AIMBENCE_API_BASE_URL = PersistentConfig(
++    "AIMBENCE_API_BASE_URL",
++    "aimbience.api.base_url",
++    os.environ.get("AIMBENCE_API_BASE_URL", "http://localhost:8000"),
++)
++
++AIMBENCE_API_KEY = PersistentConfig(
++    "AIMBENCE_API_KEY",
++    "aimbience.api.key",
++    os.environ.get("AIMBENCE_API_KEY", ""),
++)
++
++AIMBENCE_TIMEOUT = PersistentConfig(
++    "AIMBENCE_TIMEOUT",
++    "aimbience.api.timeout",
++    int(os.environ.get("AIMBENCE_TIMEOUT", "30")),
++)
++
++AIMBENCE_BATCH_SIZE = PersistentConfig(
++    "AIMBENCE_BATCH_SIZE",
++    "aimbience.api.batch_size",
++    int(os.environ.get("AIMBENCE_BATCH_SIZE", "10")),
++)
+diff --git a/backend/open_webui/main.py b/backend/open_webui/main.py
+index 9998af0e7..10181956c 100644
+--- a/backend/open_webui/main.py
++++ b/backend/open_webui/main.py
+@@ -8,7 +8,6 @@ import shutil
+ import sys
+ import time
+ import random
+-import re
+ from uuid import uuid4
+ 
+ 
+@@ -175,14 +174,13 @@ from open_webui.config import (
+     AUDIO_STT_AZURE_LOCALES,
+     AUDIO_STT_AZURE_BASE_URL,
+     AUDIO_STT_AZURE_MAX_SPEAKERS,
++    AUDIO_TTS_API_KEY,
+     AUDIO_TTS_ENGINE,
+     AUDIO_TTS_MODEL,
+-    AUDIO_TTS_VOICE,
+     AUDIO_TTS_OPENAI_API_BASE_URL,
+     AUDIO_TTS_OPENAI_API_KEY,
+-    AUDIO_TTS_OPENAI_PARAMS,
+-    AUDIO_TTS_API_KEY,
+     AUDIO_TTS_SPLIT_ON,
++    AUDIO_TTS_VOICE,
+     AUDIO_TTS_AZURE_SPEECH_REGION,
+     AUDIO_TTS_AZURE_SPEECH_BASE_URL,
+     AUDIO_TTS_AZURE_SPEECH_OUTPUT_FORMAT,
+@@ -243,16 +241,11 @@ from open_webui.config import (
+     DATALAB_MARKER_DISABLE_IMAGE_EXTRACTION,
+     DATALAB_MARKER_FORMAT_LINES,
+     DATALAB_MARKER_OUTPUT_FORMAT,
+-    MINERU_API_MODE,
+-    MINERU_API_URL,
+-    MINERU_API_KEY,
+-    MINERU_PARAMS,
+     DATALAB_MARKER_USE_LLM,
+     EXTERNAL_DOCUMENT_LOADER_URL,
+     EXTERNAL_DOCUMENT_LOADER_API_KEY,
+     TIKA_SERVER_URL,
+     DOCLING_SERVER_URL,
+-    DOCLING_PARAMS,
+     DOCLING_DO_OCR,
+     DOCLING_FORCE_OCR,
+     DOCLING_OCR_ENGINE,
+@@ -385,6 +378,12 @@ from open_webui.config import (
+     ENABLE_LDAP_GROUP_MANAGEMENT,
+     ENABLE_LDAP_GROUP_CREATION,
+     LDAP_ATTRIBUTE_FOR_GROUPS,
++    # Aimbience
++    ENABLE_AIMBENCE,
++    AIMBENCE_API_BASE_URL,
++    AIMBENCE_API_KEY,
++    AIMBENCE_TIMEOUT,
++    AIMBENCE_BATCH_SIZE,
+     # Misc
+     ENV,
+     CACHE_DIR,
+@@ -454,7 +453,6 @@ from open_webui.env import (
+     ENABLE_OTEL,
+     EXTERNAL_PWA_MANIFEST_URL,
+     AIOHTTP_CLIENT_SESSION_SSL,
+-    ENABLE_STAR_SESSIONS_MIDDLEWARE,
+ )
+ 
+ 
+@@ -785,6 +783,12 @@ app.state.config.ENABLE_LDAP_GROUP_MANAGEMENT = ENABLE_LDAP_GROUP_MANAGEMENT
+ app.state.config.ENABLE_LDAP_GROUP_CREATION = ENABLE_LDAP_GROUP_CREATION
+ app.state.config.LDAP_ATTRIBUTE_FOR_GROUPS = LDAP_ATTRIBUTE_FOR_GROUPS
+ 
++# Aimbience Configuration
++app.state.config.ENABLE_AIMBENCE = ENABLE_AIMBENCE
++app.state.config.AIMBENCE_API_BASE_URL = AIMBENCE_API_BASE_URL
++app.state.config.AIMBENCE_API_KEY = AIMBENCE_API_KEY
++app.state.config.AIMBENCE_TIMEOUT = AIMBENCE_TIMEOUT
++app.state.config.AIMBENCE_BATCH_SIZE = AIMBENCE_BATCH_SIZE
+ 
+ app.state.AUTH_TRUSTED_EMAIL_HEADER = WEBUI_AUTH_TRUSTED_EMAIL_HEADER
+ app.state.AUTH_TRUSTED_NAME_HEADER = WEBUI_AUTH_TRUSTED_NAME_HEADER
+@@ -842,7 +846,6 @@ app.state.config.EXTERNAL_DOCUMENT_LOADER_URL = EXTERNAL_DOCUMENT_LOADER_URL
+ app.state.config.EXTERNAL_DOCUMENT_LOADER_API_KEY = EXTERNAL_DOCUMENT_LOADER_API_KEY
+ app.state.config.TIKA_SERVER_URL = TIKA_SERVER_URL
+ app.state.config.DOCLING_SERVER_URL = DOCLING_SERVER_URL
+-app.state.config.DOCLING_PARAMS = DOCLING_PARAMS
+ app.state.config.DOCLING_DO_OCR = DOCLING_DO_OCR
+ app.state.config.DOCLING_FORCE_OCR = DOCLING_FORCE_OCR
+ app.state.config.DOCLING_OCR_ENGINE = DOCLING_OCR_ENGINE
+@@ -857,10 +860,6 @@ app.state.config.DOCLING_PICTURE_DESCRIPTION_API = DOCLING_PICTURE_DESCRIPTION_A
+ app.state.config.DOCUMENT_INTELLIGENCE_ENDPOINT = DOCUMENT_INTELLIGENCE_ENDPOINT
+ app.state.config.DOCUMENT_INTELLIGENCE_KEY = DOCUMENT_INTELLIGENCE_KEY
+ app.state.config.MISTRAL_OCR_API_KEY = MISTRAL_OCR_API_KEY
+-app.state.config.MINERU_API_MODE = MINERU_API_MODE
+-app.state.config.MINERU_API_URL = MINERU_API_URL
+-app.state.config.MINERU_API_KEY = MINERU_API_KEY
+-app.state.config.MINERU_PARAMS = MINERU_PARAMS
+ 
+ app.state.config.TEXT_SPLITTER = RAG_TEXT_SPLITTER
+ app.state.config.TIKTOKEN_ENCODING_NAME = TIKTOKEN_ENCODING_NAME
+@@ -1108,15 +1107,11 @@ app.state.config.AUDIO_STT_AZURE_LOCALES = AUDIO_STT_AZURE_LOCALES
+ app.state.config.AUDIO_STT_AZURE_BASE_URL = AUDIO_STT_AZURE_BASE_URL
+ app.state.config.AUDIO_STT_AZURE_MAX_SPEAKERS = AUDIO_STT_AZURE_MAX_SPEAKERS
+ 
++app.state.config.TTS_OPENAI_API_BASE_URL = AUDIO_TTS_OPENAI_API_BASE_URL
++app.state.config.TTS_OPENAI_API_KEY = AUDIO_TTS_OPENAI_API_KEY
+ app.state.config.TTS_ENGINE = AUDIO_TTS_ENGINE
+-
+ app.state.config.TTS_MODEL = AUDIO_TTS_MODEL
+ app.state.config.TTS_VOICE = AUDIO_TTS_VOICE
+-
+-app.state.config.TTS_OPENAI_API_BASE_URL = AUDIO_TTS_OPENAI_API_BASE_URL
+-app.state.config.TTS_OPENAI_API_KEY = AUDIO_TTS_OPENAI_API_KEY
+-app.state.config.TTS_OPENAI_PARAMS = AUDIO_TTS_OPENAI_PARAMS
+-
+ app.state.config.TTS_API_KEY = AUDIO_TTS_API_KEY
+ app.state.config.TTS_SPLIT_ON = AUDIO_TTS_SPLIT_ON
+ 
+@@ -1187,32 +1182,12 @@ class RedirectMiddleware(BaseHTTPMiddleware):
+             path = request.url.path
+             query_params = dict(parse_qs(urlparse(str(request.url)).query))
+ 
+-            redirect_params = {}
+-
+             # Check for the specific watch path and the presence of 'v' parameter
+             if path.endswith("/watch") and "v" in query_params:
+                 # Extract the first 'v' parameter
+-                youtube_video_id = query_params["v"][0]
+-                redirect_params["youtube"] = youtube_video_id
+-
+-            if "shared" in query_params and len(query_params["shared"]) > 0:
+-                # PWA share_target support
+-
+-                text = query_params["shared"][0]
+-                if text:
+-                    urls = re.match(r"https://\S+", text)
+-                    if urls:
+-                        from open_webui.retrieval.loaders.youtube import _parse_video_id
+-
+-                        if youtube_video_id := _parse_video_id(urls[0]):
+-                            redirect_params["youtube"] = youtube_video_id
+-                        else:
+-                            redirect_params["load-url"] = urls[0]
+-                    else:
+-                        redirect_params["q"] = text
+-
+-            if redirect_params:
+-                redirect_url = f"/?{urlencode(redirect_params)}"
++                video_id = query_params["v"][0]
++                encoded_video_id = urlencode({"youtube": video_id})
++                redirect_url = f"/?{encoded_video_id}"
+                 return RedirectResponse(url=redirect_url)
+ 
+         # Proceed with the normal flow of other requests
+@@ -1511,7 +1486,7 @@ async def chat_completion(
+         }
+ 
+         if metadata.get("chat_id") and (user and user.role != "admin"):
+-            if not metadata["chat_id"].startswith("local:"):
++            if metadata["chat_id"] != "local":
+                 chat = Chats.get_chat_by_id_and_user_id(metadata["chat_id"], user.id)
+                 if chat is None:
+                     raise HTTPException(
+@@ -1538,14 +1513,13 @@ async def chat_completion(
+             response = await chat_completion_handler(request, form_data, user)
+             if metadata.get("chat_id") and metadata.get("message_id"):
+                 try:
+-                    if not metadata["chat_id"].startswith("local:"):
+-                        Chats.upsert_message_to_chat_by_id_and_message_id(
+-                            metadata["chat_id"],
+-                            metadata["message_id"],
+-                            {
+-                                "model": model_id,
+-                            },
+-                        )
++                    Chats.upsert_message_to_chat_by_id_and_message_id(
++                        metadata["chat_id"],
++                        metadata["message_id"],
++                        {
++                            "model": model_id,
++                        },
++                    )
+                 except:
+                     pass
+ 
+@@ -1566,14 +1540,13 @@ async def chat_completion(
+             if metadata.get("chat_id") and metadata.get("message_id"):
+                 # Update the chat message with the error
+                 try:
+-                    if not metadata["chat_id"].startswith("local:"):
+-                        Chats.upsert_message_to_chat_by_id_and_message_id(
+-                            metadata["chat_id"],
+-                            metadata["message_id"],
+-                            {
+-                                "error": {"content": str(e)},
+-                            },
+-                        )
++                    Chats.upsert_message_to_chat_by_id_and_message_id(
++                        metadata["chat_id"],
++                        metadata["message_id"],
++                        {
++                            "error": {"content": str(e)},
++                        },
++                    )
+ 
+                     event_emitter = get_event_emitter(metadata)
+                     await event_emitter(
+@@ -1591,7 +1564,7 @@ async def chat_completion(
+         finally:
+             try:
+                 if mcp_clients := metadata.get("mcp_clients"):
+-                    for client in mcp_clients.values():
++                    for client in mcp_clients:
+                         await client.disconnect()
+             except Exception as e:
+                 log.debug(f"Error cleaning up: {e}")
+@@ -1942,44 +1915,42 @@ if len(app.state.config.TOOL_SERVER_CONNECTIONS) > 0:
+                     "oauth_client_info", ""
+                 )
+ 
+-                try:
+-                    oauth_client_info = decrypt_data(oauth_client_info)
+-                    app.state.oauth_client_manager.add_client(
+-                        f"mcp:{server_id}",
+-                        OAuthClientInformationFull(**oauth_client_info),
+-                    )
+-                except Exception as e:
+-                    log.error(
+-                        f"Error adding OAuth client for MCP tool server {server_id}: {e}"
+-                    )
+-                    pass
++                oauth_client_info = decrypt_data(oauth_client_info)
++                app.state.oauth_client_manager.add_client(
++                    f"mcp:{server_id}", OAuthClientInformationFull(**oauth_client_info)
++                )
+ 
+-try:
+-    if ENABLE_STAR_SESSIONS_MIDDLEWARE:
+-        redis_session_store = RedisStore(
+-            url=REDIS_URL,
+-            prefix=(f"{REDIS_KEY_PREFIX}:session:" if REDIS_KEY_PREFIX else "session:"),
+-        )
+ 
+-        app.add_middleware(SessionAutoloadMiddleware)
++# SessionMiddleware is used by authlib for oauth
++if len(OAUTH_PROVIDERS) > 0:
++    try:
++        if REDIS_URL:
++            redis_session_store = RedisStore(
++                url=REDIS_URL,
++                prefix=(
++                    f"{REDIS_KEY_PREFIX}:session:" if REDIS_KEY_PREFIX else "session:"
++                ),
++            )
++
++            app.add_middleware(SessionAutoloadMiddleware)
++            app.add_middleware(
++                StarSessionsMiddleware,
++                store=redis_session_store,
++                cookie_name="oui-session",
++                cookie_same_site=WEBUI_SESSION_COOKIE_SAME_SITE,
++                cookie_https_only=WEBUI_SESSION_COOKIE_SECURE,
++            )
++            log.info("Using Redis for session")
++        else:
++            raise ValueError("No Redis URL provided")
++    except Exception as e:
+         app.add_middleware(
+-            StarSessionsMiddleware,
+-            store=redis_session_store,
+-            cookie_name="owui-session",
+-            cookie_same_site=WEBUI_SESSION_COOKIE_SAME_SITE,
+-            cookie_https_only=WEBUI_SESSION_COOKIE_SECURE,
++            SessionMiddleware,
++            secret_key=WEBUI_SECRET_KEY,
++            session_cookie="oui-session",
++            same_site=WEBUI_SESSION_COOKIE_SAME_SITE,
++            https_only=WEBUI_SESSION_COOKIE_SECURE,
+         )
+-        log.info("Using Redis for session")
+-    else:
+-        raise ValueError("No Redis URL provided")
+-except Exception as e:
+-    app.add_middleware(
+-        SessionMiddleware,
+-        secret_key=WEBUI_SECRET_KEY,
+-        session_cookie="owui-session",
+-        same_site=WEBUI_SESSION_COOKIE_SAME_SITE,
+-        https_only=WEBUI_SESSION_COOKIE_SECURE,
+-    )
+ 
+ 
+ @app.get("/oauth/clients/{client_id}/authorize")
+@@ -2050,11 +2021,6 @@ async def get_manifest_json():
+                     "purpose": "maskable",
+                 },
+             ],
+-            "share_target": {
+-                "action": "/",
+-                "method": "GET",
+-                "params": {"text": "shared"},
+-            },
+         }
+ 
+ 
+diff --git a/backend/open_webui/routers/auths.py b/backend/open_webui/routers/auths.py
+index e3271250c..3e2ffef86 100644
+--- a/backend/open_webui/routers/auths.py
++++ b/backend/open_webui/routers/auths.py
+@@ -1070,3 +1070,192 @@ async def get_api_key(user=Depends(get_current_user)):
+         }
+     else:
+         raise HTTPException(404, detail=ERROR_MESSAGES.API_KEY_NOT_FOUND)
++
++############################
++# Aimbience Config
++############################
++
++
++class AimbienceConfig(BaseModel):
++    ENABLE_AIMBENCE: bool = False
++    AIMBENCE_API_BASE_URL: str = "http://localhost:8000"
++    AIMBENCE_API_KEY: str = ""
++    AIMBENCE_TIMEOUT: int = 30
++    AIMBENCE_BATCH_SIZE: int = 10
++
++
++@router.get("/admin/config/aimbience", response_model=AimbienceConfig)
++async def get_aimbience_config(request: Request, user=Depends(get_admin_user)):
++    return {
++        "ENABLE_AIMBENCE": request.app.state.config.ENABLE_AIMBENCE,
++        "AIMBENCE_API_BASE_URL": request.app.state.config.AIMBENCE_API_BASE_URL,
++        "AIMBENCE_API_KEY": request.app.state.config.AIMBENCE_API_KEY,
++        "AIMBENCE_TIMEOUT": request.app.state.config.AIMBENCE_TIMEOUT,
++        "AIMBENCE_BATCH_SIZE": request.app.state.config.AIMBENCE_BATCH_SIZE,
++    }
++
++
++@router.post("/admin/config/aimbience")
++async def update_aimbience_config(
++    request: Request, form_data: AimbienceConfig, user=Depends(get_admin_user)
++):
++    request.app.state.config.ENABLE_AIMBENCE = form_data.ENABLE_AIMBENCE
++    request.app.state.config.AIMBENCE_API_BASE_URL = form_data.AIMBENCE_API_BASE_URL
++    request.app.state.config.AIMBENCE_API_KEY = form_data.AIMBENCE_API_KEY
++    request.app.state.config.AIMBENCE_TIMEOUT = form_data.AIMBENCE_TIMEOUT
++    request.app.state.config.AIMBENCE_BATCH_SIZE = form_data.AIMBENCE_BATCH_SIZE
++
++    return {
++        "ENABLE_AIMBENCE": request.app.state.config.ENABLE_AIMBENCE,
++        "AIMBENCE_API_BASE_URL": request.app.state.config.AIMBENCE_API_BASE_URL,
++        "AIMBENCE_API_KEY": request.app.state.config.AIMBENCE_API_KEY,
++        "AIMBENCE_TIMEOUT": request.app.state.config.AIMBENCE_TIMEOUT,
++        "AIMBENCE_BATCH_SIZE": request.app.state.config.AIMBENCE_BATCH_SIZE,
++    }
++
++
++@router.api_route("/admin/aimbience/proxy/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
++async def aimbience_proxy(
++    request: Request, 
++    path: str, 
++    user=Depends(get_admin_user)
++):
++    """Proxy endpoint for Aimbience API calls to avoid CORS issues"""
++    try:
++        # Get Aimbience config from individual fields
++        base_url = getattr(request.app.state.config, 'AIMBENCE_API_BASE_URL', '')
++        api_key = getattr(request.app.state.config, 'AIMBENCE_API_KEY', '')
++        
++        # Build the target URL
++        target_url = f"{base_url}/{path}"
++        
++        # Get query parameters
++        query_params = str(request.query_params)
++        if query_params:
++            target_url += f"?{query_params}"
++        
++        # Log the proxy request for debugging
++        print(f"Aimbience proxy: {request.method} {path} -> {target_url}")
++        print(f"API Key present: {bool(api_key)}")
++        print(f"API Key length: {len(api_key) if api_key else 0}")
++        print(f"Request headers: {dict(request.headers)}")
++        
++        # Make the request to aimby-api
++        # Note: Package operations (upgrade/install) are async and return task IDs immediately
++        # The frontend then monitors task progress separately
++        import httpx
++        async with httpx.AsyncClient() as client:
++            headers = {
++                "Accept": "application/json"
++            }
++            
++            # Only add Content-Type for requests that might have a body
++            if request.method in ["POST", "PUT", "PATCH"]:
++                headers["Content-Type"] = "application/json"
++            
++            # Don't send authentication for public endpoints
++            public_endpoints = ["health", "docs", "openapi.json"]
++            if api_key and path not in public_endpoints:
++                headers["Authorization"] = f"Bearer {api_key}"
++                print(f"Setting Authorization header: Bearer {api_key[:10]}...")
++            else:
++                if path in public_endpoints:
++                    print(f"Public endpoint '{path}' - no authentication required")
++                else:
++                    print("No API key found, proceeding without authentication")
++            
++            print(f"Final request headers to backend: {headers}")
++            
++            # Get request body for POST/PUT/PATCH requests
++            body = None
++            if request.method in ["POST", "PUT", "PATCH"]:
++                try:
++                    body = await request.body()
++                    if body:
++                        # Try to parse as JSON for logging
++                        try:
++                            import json
++                            body_json = json.loads(body)
++                            print(f"Request body: {body_json}")
++                        except:
++                            print(f"Request body (raw): {body}")
++                except Exception as e:
++                    print(f"Error reading request body: {e}")
++            
++            # Make the request with the appropriate method
++            if request.method == "GET":
++                response = await client.get(target_url, headers=headers, timeout=30.0)
++            elif request.method == "POST":
++                if "packages" in path:
++                    # Package operations should return very quickly (task ID only)
++                    timeout = 10.0  # Reduced timeout for package operations
++                    print(f"Using reduced timeout {timeout}s for package operation")
++                else:
++                    timeout = 30.0
++                response = await client.post(target_url, headers=headers, content=body, timeout=timeout)
++            elif request.method == "PUT":
++                response = await client.put(target_url, headers=headers, content=body, timeout=30.0)
++            elif request.method == "DELETE":
++                response = await client.delete(target_url, headers=headers, timeout=30.0)
++            elif request.method == "PATCH":
++                response = await client.patch(target_url, headers=headers, content=body, timeout=30.0)
++            else:
++                raise HTTPException(status_code=405, detail=f"Method {request.method} not supported")
++            
++            # Log the response for debugging
++            print(f"Aimbience proxy response: {response.status_code}")
++            print(f"Aimbience proxy response headers: {dict(response.headers)}")
++            
++            # Check if response is successful
++            if response.status_code >= 400:
++                print(f"Aimbience proxy error response: {response.text}")
++            
++            # For package operations, we need to handle the response efficiently
++            # The response body is typically just a JSON task ID, so we can read it quickly
++            if "packages" in path and request.method == "POST":
++                print(f"Handling package operation response for {path}")
++                try:
++                    # Read response body with a reasonable timeout
++                    response_text = await response.aread()
++                    response_str = response_text.decode('utf-8')
++                    print(f"Package operation response body: {response_str}")
++                    
++                    # Validate that we got a proper response
++                    if response_str and len(response_str) > 0:
++                        return Response(
++                            content=response_text,
++                            status_code=response.status_code,
++                            headers=dict(response.headers)
++                        )
++                    else:
++                        print("Warning: Empty response body, returning fallback")
++                        return Response(
++                            content='{"success": true, "message": "Package operation started", "status": "started"}',
++                            status_code=200,
++                            headers=dict(response.headers)
++                        )
++                except Exception as e:
++                    print(f"Error reading package response body: {e}")
++                    print(f"Response status: {response.status_code}")
++                    print(f"Response headers: {dict(response.headers)}")
++                    # If reading fails, return a minimal response with the task ID
++                    # This ensures the frontend gets a response even if body reading fails
++                    return Response(
++                        content='{"success": true, "message": "Package operation started", "status": "started"}',
++                        status_code=200,
++                        headers=dict(response.headers)
++                    )
++            
++            # For other operations, use streaming response to avoid timeouts
++            return Response(
++                content=response.content,
++                status_code=response.status_code,
++                headers=dict(response.headers)
++            )
++            
++    except Exception as e:
++        import traceback
++        print(f"Aimbience proxy error: {str(e)}")
++        print(f"Aimbience proxy error type: {type(e).__name__}")
++        print(f"Aimbience proxy error traceback: {traceback.format_exc()}")
++        raise HTTPException(status_code=500, detail=f"Proxy error: {str(e)}")
