@@ -3,12 +3,11 @@ import hashlib
 import json
 import logging
 from typing import Optional
+from urllib.parse import urlparse
 
 import aiohttp
 from aiocache import cached
 import requests
-from urllib.parse import quote
-import time
 
 from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
@@ -19,10 +18,15 @@ from fastapi.responses import (
     JSONResponse,
     PlainTextResponse,
 )
-from pydantic import BaseModel
-from starlette.background import BackgroundTask
+from pydantic import BaseModel, ConfigDict
+
+from sqlalchemy.orm import Session
+
+from open_webui.internal.db import get_session
 
 from open_webui.models.models import Models
+from open_webui.models.access_grants import AccessGrants
+from open_webui.models.groups import Groups
 from open_webui.config import (
     CACHE_DIR,
 )
@@ -32,12 +36,12 @@ from open_webui.env import (
     AIOHTTP_CLIENT_TIMEOUT,
     AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST,
     ENABLE_FORWARD_USER_INFO_HEADERS,
+    FORWARD_SESSION_INFO_HEADER_CHAT_ID,
     BYPASS_MODEL_ACCESS_CONTROL,
 )
 from open_webui.models.users import UserModel
 
 from open_webui.constants import ERROR_MESSAGES
-from open_webui.env import SRC_LOG_LEVELS
 
 
 from open_webui.utils.payload import (
@@ -45,18 +49,16 @@ from open_webui.utils.payload import (
     apply_system_prompt_to_body,
 )
 from open_webui.utils.misc import (
+    cleanup_response,
     convert_logit_bias_input_to_json,
+    stream_chunks_handler,
+    stream_wrapper,
 )
 
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.access_control import has_access
-from open_webui.socket.main import (
-    get_event_emitter,
-)
-
+from open_webui.utils.headers import include_user_info_headers
 
 log = logging.getLogger(__name__)
-log.setLevel(SRC_LOG_LEVELS["OPENAI"])
 
 
 ##########################################
@@ -66,79 +68,27 @@ log.setLevel(SRC_LOG_LEVELS["OPENAI"])
 ##########################################
 
 
-async def send_get_request(url, key=None, user: Optional[UserModel] = None, max_retries=2):
+async def send_get_request(url, key=None, user: UserModel = None):
     timeout = aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST)
-    
-    for attempt in range(max_retries + 1):
-        try:
-            async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
-                async with session.get(
-                    url,
-                    headers=dict(
-                        **({"Authorization": f"Bearer {key}"} if key else {}),
-                        **(
-                            {
-                                "X-OpenWebUI-User-Name": quote(user.name, safe=" "),
-                                "X-OpenWebUI-User-Id": user.id,
-                                "X-OpenWebUI-User-Email": user.email,
-                                "X-OpenWebUI-User-Role": user.role,
-                            }
-                            if ENABLE_FORWARD_USER_INFO_HEADERS and user is not None
-                            else {}
-                        ),
-                    ),
-                    ssl=AIOHTTP_CLIENT_SESSION_SSL,
-                ) as response:
-                    return await response.json()
-                    
-        except Exception as e:
-            # Enhanced error logging for better debugging
-            import traceback
-            error_type = type(e).__name__
-            error_msg = str(e) if e else "Unknown error"
-            error_traceback = traceback.format_exc()
-            
-            if attempt < max_retries:
-                # Log retry attempt
-                log.warning(f"Connection attempt {attempt + 1}/{max_retries + 1} failed for URL {url}:")
-                log.warning(f"  Error Type: {error_type}")
-                log.warning(f"  Error Message: {error_msg}")
-                
-                # Wait before retry with exponential backoff
-                import asyncio
-                wait_time = (2 ** attempt) * 0.5  # 0.5s, 1s, 2s
-                log.info(f"Retrying in {wait_time}s...")
-                await asyncio.sleep(wait_time)
-                continue
-            else:
-                # Final attempt failed, log detailed error
-                log.error(f"Connection error for URL {url} after {max_retries + 1} attempts:")
-                log.error(f"  Error Type: {error_type}")
-                log.error(f"  Error Message: {error_msg}")
-                log.error(f"  Error Traceback: {error_traceback}")
-                
-                # Also log specific aiohttp errors
-                if hasattr(e, 'status'):
-                    log.error(f"  HTTP Status: {getattr(e, 'status')}")
-                if hasattr(e, 'headers'):
-                    log.error(f"  Response Headers: {getattr(e, 'headers')}")
-                # Log additional aiohttp-specific attributes safely
-                if hasattr(e, 'code'):
-                    log.error(f"  Error Code: {getattr(e, 'code')}")
-                if hasattr(e, 'message'):
-                    log.error(f"  Error Message: {getattr(e, 'message')}")
-                    
-                return None
+    try:
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+            headers = {
+                **({"Authorization": f"Bearer {key}"} if key else {}),
+            }
 
+            if ENABLE_FORWARD_USER_INFO_HEADERS and user:
+                headers = include_user_info_headers(headers, user)
 
-async def cleanup_response(
-    response: Optional[aiohttp.ClientResponse],
-    session: Optional[aiohttp.ClientSession],
-):
-    if response:
-        response.close()
-    if session:
-        await session.close()
+            async with session.get(
+                url,
+                headers=headers,
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
+            ) as response:
+                return await response.json()
+    except Exception as e:
+        # Handle connection error here
+        log.error(f"Connection error: {e}")
+        return None
 
 
 def openai_reasoning_model_handler(payload):
@@ -181,22 +131,12 @@ async def get_headers_and_cookies(
             if "openrouter.ai" in url
             else {}
         ),
-        **(
-            {
-                "X-OpenWebUI-User-Name": quote(user.name, safe=" "),
-                "X-OpenWebUI-User-Id": user.id,
-                "X-OpenWebUI-User-Email": user.email,
-                "X-OpenWebUI-User-Role": user.role,
-                **(
-                    {"X-OpenWebUI-Chat-Id": metadata.get("chat_id")}
-                    if metadata and metadata.get("chat_id")
-                    else {}
-                ),
-            }
-            if ENABLE_FORWARD_USER_INFO_HEADERS
-            else {}
-        ),
     }
+
+    if ENABLE_FORWARD_USER_INFO_HEADERS and user:
+        headers = include_user_info_headers(headers, user)
+        if metadata and metadata.get("chat_id"):
+            headers[FORWARD_SESSION_INFO_HEADER_CHAT_ID] = metadata.get("chat_id")
 
     token = None
     auth_type = config.get("auth_type")
@@ -401,37 +341,41 @@ async def get_all_models_responses(request: Request, user: UserModel) -> list:
     if not request.app.state.config.ENABLE_OPENAI_API:
         return []
 
+    # Cache config values locally to avoid repeated Redis lookups.
+    # Each access to request.app.state.config.<KEY> triggers a Redis GET;
+    # caching here avoids hundreds of redundant round-trips.
+    api_base_urls = request.app.state.config.OPENAI_API_BASE_URLS
+    api_keys = list(request.app.state.config.OPENAI_API_KEYS)
+    api_configs = request.app.state.config.OPENAI_API_CONFIGS
+
     # Check if API KEYS length is same than API URLS length
-    num_urls = len(request.app.state.config.OPENAI_API_BASE_URLS)
-    num_keys = len(request.app.state.config.OPENAI_API_KEYS)
+    num_urls = len(api_base_urls)
+    num_keys = len(api_keys)
 
     if num_keys != num_urls:
         # if there are more keys than urls, remove the extra keys
         if num_keys > num_urls:
-            new_keys = request.app.state.config.OPENAI_API_KEYS[:num_urls]
-            request.app.state.config.OPENAI_API_KEYS = new_keys
+            api_keys = api_keys[:num_urls]
+            request.app.state.config.OPENAI_API_KEYS = api_keys
         # if there are more urls than keys, add empty keys
         else:
-            request.app.state.config.OPENAI_API_KEYS += [""] * (num_urls - num_keys)
+            api_keys += [""] * (num_urls - num_keys)
+            request.app.state.config.OPENAI_API_KEYS = api_keys
 
     request_tasks = []
-    for idx, url in enumerate(request.app.state.config.OPENAI_API_BASE_URLS):
-        if (str(idx) not in request.app.state.config.OPENAI_API_CONFIGS) and (
-            url not in request.app.state.config.OPENAI_API_CONFIGS  # Legacy support
-        ):
+    for idx, url in enumerate(api_base_urls):
+        if (str(idx) not in api_configs) and (url not in api_configs):  # Legacy support
             request_tasks.append(
                 send_get_request(
                     f"{url}/models",
-                    request.app.state.config.OPENAI_API_KEYS[idx],
+                    api_keys[idx],
                     user=user,
                 )
             )
         else:
-            api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
+            api_config = api_configs.get(
                 str(idx),
-                request.app.state.config.OPENAI_API_CONFIGS.get(
-                    url, {}
-                ),  # Legacy support
+                api_configs.get(url, {}),  # Legacy support
             )
 
             enable = api_config.get("enable", True)
@@ -442,7 +386,7 @@ async def get_all_models_responses(request: Request, user: UserModel) -> list:
                     request_tasks.append(
                         send_get_request(
                             f"{url}/models",
-                            request.app.state.config.OPENAI_API_KEYS[idx],
+                            api_keys[idx],
                             user=user,
                         )
                     )
@@ -471,12 +415,10 @@ async def get_all_models_responses(request: Request, user: UserModel) -> list:
 
     for idx, response in enumerate(responses):
         if response:
-            url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
-            api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
+            url = api_base_urls[idx]
+            api_config = api_configs.get(
                 str(idx),
-                request.app.state.config.OPENAI_API_CONFIGS.get(
-                    url, {}
-                ),  # Legacy support
+                api_configs.get(url, {}),  # Legacy support
             )
 
             connection_type = api_config.get("connection_type", "external")
@@ -510,15 +452,32 @@ async def get_all_models_responses(request: Request, user: UserModel) -> list:
     return responses
 
 
-async def get_filtered_models(models, user):
+async def get_filtered_models(models, user, db=None):
     # Filter models based on user access control
+    model_ids = [model["id"] for model in models.get("data", [])]
+    model_infos = {
+        model_info.id: model_info
+        for model_info in Models.get_models_by_ids(model_ids, db=db)
+    }
+    user_group_ids = {
+        group.id for group in Groups.get_groups_by_member_id(user.id, db=db)
+    }
+
+    # Batch-fetch accessible resource IDs in a single query instead of N has_access calls
+    accessible_model_ids = AccessGrants.get_accessible_resource_ids(
+        user_id=user.id,
+        resource_type="model",
+        resource_ids=list(model_infos.keys()),
+        permission="read",
+        user_group_ids=user_group_ids,
+        db=db,
+    )
+
     filtered_models = []
     for model in models.get("data", []):
-        model_info = Models.get_model_by_id(model["id"])
+        model_info = model_infos.get(model["id"])
         if model_info:
-            if user.id == model_info.user_id or has_access(
-                user.id, type="read", access_control=model_info.access_control
-            ):
+            if user.id == model_info.user_id or model_info.id in accessible_model_ids:
                 filtered_models.append(model)
     return filtered_models
 
@@ -528,88 +487,73 @@ async def get_filtered_models(models, user):
     key=lambda _, user: f"openai_all_models_{user.id}" if user else "openai_all_models",
 )
 async def get_all_models(request: Request, user: UserModel) -> dict[str, list]:
-    import uuid
-    request_id = str(uuid.uuid4())[:8]
-    log.info(f"[{request_id}] get_all_models() - Starting model fetch")
+    log.info("get_all_models()")
 
     if not request.app.state.config.ENABLE_OPENAI_API:
-        log.info(f"[{request_id}] get_all_models() - OpenAI API disabled")
         return {"data": []}
 
-    try:
-        responses = await get_all_models_responses(request, user=user)
-        log.info(f"[{request_id}] get_all_models() - Got {len(responses)} responses")
-        
-        # Log response status for debugging
-        for idx, response in enumerate(responses):
-            if response is None:
-                log.warning(f"[{request_id}] get_all_models() - Response {idx} is None")
-            elif isinstance(response, dict) and "error" in response:
-                log.warning(f"[{request_id}] get_all_models() - Response {idx} has error: {response['error']}")
-            else:
-                log.debug(f"[{request_id}] get_all_models() - Response {idx} is valid")
+    # Cache config value locally to avoid repeated Redis lookups inside
+    # the nested loop in get_merged_models (one GET per model otherwise).
+    api_base_urls = request.app.state.config.OPENAI_API_BASE_URLS
 
-        def extract_data(response):
-            if response and "data" in response:
-                return response["data"]
-            if isinstance(response, list):
-                return response
-            return None
+    responses = await get_all_models_responses(request, user=user)
 
-        def is_supported_openai_models(model_id):
-            if any(
-                name in model_id
-                for name in [
-                    "babbage",
-                    "dall-e",
-                    "davinci",
-                    "embedding",
-                    "tts",
-                    "whisper",
-                ]
-            ):
-                return False
-            return True
+    def extract_data(response):
+        if response and "data" in response:
+            return response["data"]
+        if isinstance(response, list):
+            return response
+        return None
 
-        def get_merged_models(model_lists):
-            log.debug(f"merge_models_lists {model_lists}")
-            models = {}
+    def is_supported_openai_models(model_id):
+        if any(
+            name in model_id
+            for name in [
+                "babbage",
+                "dall-e",
+                "davinci",
+                "embedding",
+                "tts",
+                "whisper",
+            ]
+        ):
+            return False
+        return True
 
-            for idx, model_list in enumerate(model_lists):
-                if model_list is not None and "error" not in model_list:
-                    for model in model_list:
-                        model_id = model.get("id") or model.get("name")
+    def get_merged_models(model_lists):
+        log.debug(f"merge_models_lists {model_lists}")
+        models = {}
 
-                        if (
-                            "api.openai.com"
-                            in request.app.state.config.OPENAI_API_BASE_URLS[idx]
-                            and not is_supported_openai_models(model_id)
-                        ):
-                            # Skip unwanted OpenAI models
-                            continue
+        for idx, model_list in enumerate(model_lists):
+            if model_list is not None and "error" not in model_list:
+                for model in model_list:
+                    model_id = model.get("id") or model.get("name")
 
-                        if model_id and model_id not in models:
-                            models[model_id] = {
-                                **model,
-                                "name": model.get("name", model_id),
-                                "owned_by": "openai",
-                                "openai": model,
-                                "connection_type": model.get("connection_type", "external"),
-                                "urlIdx": idx,
-                            }
+                    base_url = api_base_urls[idx]
+                    hostname = urlparse(base_url).hostname if base_url else None
+                    if hostname == "api.openai.com" and not is_supported_openai_models(
+                        model_id
+                    ):
+                        # Skip unwanted OpenAI models
+                        continue
 
-            return models
+                    if model_id and model_id not in models:
+                        models[model_id] = {
+                            **model,
+                            "name": model.get("name", model_id),
+                            "owned_by": "openai",
+                            "openai": model,
+                            "connection_type": model.get("connection_type", "external"),
+                            "urlIdx": idx,
+                        }
 
-        models = get_merged_models(map(extract_data, responses))
-        log.debug(f"models: {models}")
+        return models
 
-        request.app.state.OPENAI_MODELS = models
-        return {"data": list(models.values())}
-    except Exception as e:
-        log.error(f"[{request_id}] get_all_models() - Unexpected error: {type(e).__name__}: {str(e)}")
-        import traceback
-        log.error(f"[{request_id}] get_all_models() - Traceback: {traceback.format_exc()}")
-        return {"data": []}
+    models = get_merged_models(map(extract_data, responses))
+    log.debug(f"models: {models}")
+
+    request.app.state.OPENAI_MODELS = models
+    return {"data": list(models.values())}
 
 
 @router.get("/models")
@@ -617,6 +561,9 @@ async def get_all_models(request: Request, user: UserModel) -> dict[str, list]:
 async def get_models(
     request: Request, url_idx: Optional[int] = None, user=Depends(get_verified_user)
 ):
+    if not request.app.state.config.ENABLE_OPENAI_API:
+        raise HTTPException(status_code=503, detail="OpenAI API is disabled")
+
     models = {
         "data": [],
     }
@@ -657,9 +604,12 @@ async def get_models(
                         if r.status != 200:
                             # Extract response error details if available
                             error_detail = f"HTTP Error: {r.status}"
-                            res = await r.json()
-                            if "error" in res:
-                                error_detail = f"External Error: {res['error']}"
+                            try:
+                                res = await r.json()
+                                if "error" in res:
+                                    error_detail = f"External Error: {res['error']}"
+                            except Exception:
+                                pass
                             raise Exception(error_detail)
 
                         response_data = await r.json()
@@ -794,81 +744,6 @@ async def verify_connection(
             )
 
 
-@router.get("/health/connections")
-async def check_connection_health(request: Request, user=Depends(get_admin_user)):
-    """Diagnostic endpoint to check the health of all configured API connections"""
-    if not request.app.state.config.ENABLE_OPENAI_API:
-        return {"status": "disabled", "message": "OpenAI API is disabled"}
-    
-    health_results = []
-    
-    for idx, url in enumerate(request.app.state.config.OPENAI_API_BASE_URLS):
-        key = request.app.state.config.OPENAI_API_KEYS[idx]
-        api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
-            str(idx),
-            request.app.state.config.OPENAI_API_CONFIGS.get(url, {})
-        )
-        
-        connection_info = {
-            "index": idx,
-            "url": url,
-            "has_key": bool(key),
-            "key_length": len(key) if key else 0,
-            "config": api_config,
-            "status": "unknown"
-        }
-        
-        try:
-            # Test the connection with a simple models request
-            test_url = f"{url}/models"
-            timeout = aiohttp.ClientTimeout(total=5)  # Shorter timeout for health check
-            
-            async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
-                start_time = time.time()
-                async with session.get(
-                    test_url,
-                    headers={"Authorization": f"Bearer {key}"} if key else {},
-                    ssl=AIOHTTP_CLIENT_SESSION_SSL,
-                ) as response:
-                    response_time = time.time() - start_time
-                    connection_info.update({
-                        "status": "healthy",
-                        "http_status": response.status,
-                        "response_time_ms": round(response_time * 1000, 2),
-                        "response_headers": dict(response.headers)
-                    })
-                    
-                    if response.status == 200:
-                        try:
-                            data = await response.json()
-                            connection_info["model_count"] = len(data.get("data", [])) if isinstance(data, dict) else 0
-                        except:
-                            connection_info["model_count"] = "parse_error"
-                    else:
-                        connection_info["status"] = f"http_error_{response.status}"
-                        
-        except Exception as e:
-            connection_info.update({
-                "status": "error",
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-                "error_details": {
-                    "timeout": getattr(e, 'timeout', None),
-                    "status": getattr(e, 'status', None),
-                    "headers": getattr(e, 'headers', None)
-                }
-            })
-        
-        health_results.append(connection_info)
-    
-    return {
-        "timestamp": time.time(),
-        "total_connections": len(health_results),
-        "healthy_connections": len([r for r in health_results if r["status"] == "healthy"]),
-        "connections": health_results
-    }
-
-
 def get_azure_allowed_params(api_version: str) -> set[str]:
     allowed_params = {
         "messages",
@@ -897,6 +772,7 @@ def get_azure_allowed_params(api_version: str) -> set[str]:
         "response_format",
         "seed",
         "max_completion_tokens",
+        "reasoning_effort",
     }
 
     try:
@@ -941,13 +817,127 @@ def convert_to_azure_payload(url, payload: dict, api_version: str):
     return url, payload
 
 
+def convert_to_responses_payload(payload: dict) -> dict:
+    """
+    Convert Chat Completions payload to Responses API format.
+
+    Chat Completions: { messages: [{role, content}], ... }
+    Responses API: { input: [{type: "message", role, content: [...]}], instructions: "system" }
+    """
+    messages = payload.pop("messages", [])
+
+    system_content = ""
+    input_items = []
+
+    for msg in messages:
+        role = msg.get("role", "user")
+        content = msg.get("content", "")
+
+        # Check for stored output items (from previous Responses API turn)
+        stored_output = msg.get("output")
+        if stored_output and isinstance(stored_output, list):
+            input_items.extend(stored_output)
+            continue
+
+        if role == "system":
+            if isinstance(content, str):
+                system_content = content
+            elif isinstance(content, list):
+                system_content = "\n".join(
+                    p.get("text", "") for p in content if p.get("type") == "text"
+                )
+            continue
+
+        # Convert content format
+        text_type = "output_text" if role == "assistant" else "input_text"
+
+        if isinstance(content, str):
+            content_parts = [{"type": text_type, "text": content}]
+        elif isinstance(content, list):
+            content_parts = []
+            for part in content:
+                if part.get("type") == "text":
+                    content_parts.append(
+                        {"type": text_type, "text": part.get("text", "")}
+                    )
+                elif part.get("type") == "image_url":
+                    url_data = part.get("image_url", {})
+                    url = (
+                        url_data.get("url", "")
+                        if isinstance(url_data, dict)
+                        else url_data
+                    )
+                    content_parts.append({"type": "input_image", "image_url": url})
+        else:
+            content_parts = [{"type": text_type, "text": str(content)}]
+
+        input_items.append({"type": "message", "role": role, "content": content_parts})
+
+    responses_payload = {**payload, "input": input_items}
+
+    if system_content:
+        responses_payload["instructions"] = system_content
+
+    if "max_tokens" in responses_payload:
+        responses_payload["max_output_tokens"] = responses_payload.pop("max_tokens")
+
+    # Remove Chat Completions-only parameters not supported by the Responses API
+    for unsupported_key in (
+        "stream_options",
+        "logit_bias",
+        "frequency_penalty",
+        "presence_penalty",
+        "stop",
+    ):
+        responses_payload.pop(unsupported_key, None)
+
+    # Convert Chat Completions tools format to Responses API format
+    # Chat Completions: {"type": "function", "function": {"name": ..., "description": ..., "parameters": ...}}
+    # Responses API:    {"type": "function", "name": ..., "description": ..., "parameters": ...}
+    if "tools" in responses_payload and isinstance(responses_payload["tools"], list):
+        converted_tools = []
+        for tool in responses_payload["tools"]:
+            if isinstance(tool, dict) and "function" in tool:
+                func = tool["function"]
+                converted_tool = {"type": tool.get("type", "function")}
+                if isinstance(func, dict):
+                    converted_tool["name"] = func.get("name", "")
+                    if "description" in func:
+                        converted_tool["description"] = func["description"]
+                    if "parameters" in func:
+                        converted_tool["parameters"] = func["parameters"]
+                    if "strict" in func:
+                        converted_tool["strict"] = func["strict"]
+                converted_tools.append(converted_tool)
+            else:
+                # Already in correct format or unknown format, pass through
+                converted_tools.append(tool)
+        responses_payload["tools"] = converted_tools
+
+    return responses_payload
+
+
+def convert_responses_result(response: dict) -> dict:
+    """
+    Convert non-streaming Responses API result.
+    Just add done flag - pass through raw response, frontend handles output.
+    """
+    response["done"] = True
+    return response
+
+
 @router.post("/chat/completions")
 async def generate_chat_completion(
     request: Request,
     form_data: dict,
     user=Depends(get_verified_user),
     bypass_filter: Optional[bool] = False,
+    bypass_system_prompt: bool = False,
 ):
+    # NOTE: We intentionally do NOT use Depends(get_session) here.
+    # Database operations (get_model_by_id, AccessGrants.has_access) manage their own short-lived sessions.
+    # This prevents holding a connection during the entire LLM call (30-60+ seconds),
+    # which would exhaust the connection pool under concurrent load.
     if BYPASS_MODEL_ACCESS_CONTROL:
         bypass_filter = True
 
@@ -956,16 +946,19 @@ async def generate_chat_completion(
     payload = {**form_data}
     metadata = payload.pop("metadata", None)
 
-    __event_emitter__ = get_event_emitter(metadata)
-
     model_id = form_data.get("model")
     model_info = Models.get_model_by_id(model_id)
 
     # Check model info and override the payload
     if model_info:
         if model_info.base_model_id:
-            payload["model"] = model_info.base_model_id
-            model_id = model_info.base_model_id
+            base_model_id = (
+                request.base_model_id
+                if hasattr(request, "base_model_id")
+                else model_info.base_model_id
+            )  # Use request's base_model_id if available
+            payload["model"] = base_model_id
+            model_id = base_model_id
 
         params = model_info.params.model_dump()
 
@@ -973,14 +966,22 @@ async def generate_chat_completion(
             system = params.pop("system", None)
 
             payload = apply_model_params_to_body_openai(params, payload)
-            payload = apply_system_prompt_to_body(system, payload, metadata, user)
+            if not bypass_system_prompt:
+                payload = apply_system_prompt_to_body(system, payload, metadata, user)
 
         # Check if user has access to the model
         if not bypass_filter and user.role == "user":
+            user_group_ids = {
+                group.id for group in Groups.get_groups_by_member_id(user.id)
+            }
             if not (
                 user.id == model_info.user_id
-                or has_access(
-                    user.id, type="read", access_control=model_info.access_control
+                or AccessGrants.has_access(
+                    user_id=user.id,
+                    resource_type="model",
+                    resource_id=model_info.id,
+                    permission="read",
+                    user_group_ids=user_group_ids,
                 )
             ):
                 raise HTTPException(
@@ -994,8 +995,13 @@ async def generate_chat_completion(
                 detail="Model not found",
             )
 
-    await get_all_models(request, user=user)
-    model = request.app.state.OPENAI_MODELS.get(model_id)
+    # Check if model is already in app state cache to avoid expensive get_all_models() call
+    models = request.app.state.OPENAI_MODELS
+    if not models or model_id not in models:
+        await get_all_models(request, user=user)
+        models = request.app.state.OPENAI_MODELS
+    model = models.get(model_id)
+
     if model:
         idx = model["urlIdx"]
     else:
@@ -1024,10 +1030,6 @@ async def generate_chat_completion(
             "email": user.email,
             "role": user.role,
         }
-        
-        # Add chat_id to the payload if available in metadata
-        if metadata and metadata.get("chat_id"):
-            payload["chat_id"] = metadata.get("chat_id")
 
     url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
     key = request.app.state.config.OPENAI_API_KEYS[idx]
@@ -1045,14 +1047,17 @@ async def generate_chat_completion(
         del payload["max_tokens"]
 
     # Convert the modified body back to JSON
-    if "logit_bias" in payload:
-        payload["logit_bias"] = json.loads(
-            convert_logit_bias_input_to_json(payload["logit_bias"])
-        )
+    if "logit_bias" in payload and payload["logit_bias"]:
+        logit_bias = convert_logit_bias_input_to_json(payload["logit_bias"])
+
+        if logit_bias:
+            payload["logit_bias"] = json.loads(logit_bias)
 
     headers, cookies = await get_headers_and_cookies(
         request, url, key, api_config, metadata, user=user
     )
+
+    is_responses = api_config.get("api_type") == "responses"
 
     if api_config.get("azure", False):
         api_version = api_config.get("api_version", "2023-03-15-preview")
@@ -1064,9 +1069,18 @@ async def generate_chat_completion(
             headers["api-key"] = key
 
         headers["api-version"] = api_version
-        request_url = f"{request_url}/chat/completions?api-version={api_version}"
+
+        if is_responses:
+            payload = convert_to_responses_payload(payload)
+            request_url = f"{request_url}/responses?api-version={api_version}"
+        else:
+            request_url = f"{request_url}/chat/completions?api-version={api_version}"
     else:
-        request_url = f"{url}/chat/completions"
+        if is_responses:
+            payload = convert_to_responses_payload(payload)
+            request_url = f"{url}/responses"
+        else:
+            request_url = f"{url}/chat/completions"
 
     payload = json.dumps(payload)
 
@@ -1092,130 +1106,11 @@ async def generate_chat_completion(
         # Check if response is SSE
         if "text/event-stream" in r.headers.get("Content-Type", ""):
             streaming = True
-
-            if "pipeline" in model and model.get("pipeline"):
-                # Read each event from the stream and parse event
-                async def stream_events():
-                    async for line in r.content:
-                        if line:
-                            log.info(line)
-                            if line.startswith(b"data: "):
-                                data_str = line[6:].strip()
-                                try:
-                                    data = json.loads(data_str.decode("utf-8"))
-                                    if (
-                                        isinstance(data, dict)
-                                        and "choices" in data
-                                        and isinstance(data["choices"], list)
-                                        and len(data["choices"]) > 0
-                                    ):
-                                        choice = data["choices"][0]
-                                        if (
-                                            isinstance(choice, dict)
-                                            and "delta" in choice
-                                            and isinstance(choice["delta"], dict)
-                                            and "status" in choice["delta"]
-                                        ):
-                                            status_content = choice["delta"]["status"]
-                                            log.error(
-                                                f"status_content: {status_content}"
-                                            )
-                                            await __event_emitter__(
-                                                {
-                                                    "type": "status",  # We set the type here
-                                                    "data": {
-                                                        "description": status_content,
-                                                        "done": False,
-                                                        "hidden": False,
-                                                    },
-                                                    # Note done is False here indicating we are still emitting statuses
-                                                }
-                                            )
-                                            continue  # Skip yielding the original data line
-                                        elif (
-                                            isinstance(choice, dict)
-                                            and "delta" in choice
-                                            and isinstance(choice["delta"], dict)
-                                            and "content" in choice["delta"]
-                                            and choice["delta"]["content"]
-                                        ):
-                                            content = choice["delta"]["content"]
-                                            
-                                            # Skip [DONE] markers - don't display them
-                                            if content == "[DONE]":
-                                                continue
-                                            
-                                            # Check if content contains status messages
-                                            if content.startswith("Status: "):
-                                                # Extract status messages from content
-                                                status_parts = content.split("Status: ")
-                                                for i, part in enumerate(status_parts[1:], 1):  # Skip first empty part
-                                                    if part.strip():
-                                                        # Clean up the status message
-                                                        status_msg = part.strip()
-                                                        # Remove INFO: prefix if present
-                                                        if status_msg.startswith("INFO: "):
-                                                            status_msg = status_msg[6:]  # Remove "INFO: " prefix
-                                                        elif status_msg.startswith("WARNING: "):
-                                                            status_msg = status_msg[9:]  # Remove "WARNING: " prefix
-                                                        elif status_msg.startswith("ERROR: "):
-                                                            status_msg = status_msg[7:]  # Remove "ERROR: " prefix
-                                                        # Remove trailing content if it exists
-                                                        if "..." in status_msg:
-                                                            status_msg = status_msg.split("...")[0] + "..."
-                                                        
-                                                        await __event_emitter__(
-                                                            {
-                                                                "type": "status",
-                                                                "data": {
-                                                                    "description": status_msg,
-                                                                    "done": False,
-                                                                    "hidden": False,
-                                                                },
-                                                            }
-                                                        )
-                                                
-                                                # Don't yield the status content to the chat
-                                                continue
-                                            else:
-                                                # Regular content, yield it normally
-                                                yield line
-                                        else:
-                                            await __event_emitter__(
-                                                {
-                                                    "type": "status",  # We set the type here
-                                                    "data": {
-                                                        "description": "Finished",
-                                                        "done": True,
-                                                        "hidden": False,
-                                                    },
-                                                    # Note done is False here indicating we are still emitting statuses
-                                                }
-                                            )
-                                            yield line
-
-                                except json.JSONDecodeError:
-                                    yield line
-                            else:
-                                yield line
-
-                return StreamingResponse(
-                    stream_events(),
-                    status_code=r.status,
-                    headers=dict(r.headers),
-                    background=BackgroundTask(
-                        cleanup_response, response=r, session=session
-                    ),
-                )
-            else:
-                return StreamingResponse(
-                    r.content,
-                    status_code=r.status,
-                    headers=dict(r.headers),
-                    background=BackgroundTask(
-                        cleanup_response, response=r, session=session
-                    ),
-                )
+            return StreamingResponse(
+                stream_wrapper(r, session, stream_chunks_handler),
+                status_code=r.status,
+                headers=dict(r.headers),
+            )
         else:
             try:
                 response = await r.json()
@@ -1228,6 +1123,10 @@ async def generate_chat_completion(
                     return JSONResponse(status_code=r.status, content=response)
                 else:
                     return PlainTextResponse(status_code=r.status, content=response)
+
+            # Convert Responses API result to simple format
+            if is_responses and isinstance(response, dict):
+                response = convert_responses_result(response)
 
             return response
     except Exception as e:
@@ -1258,9 +1157,12 @@ async def embeddings(request: Request, form_data: dict, user):
     # Prepare payload/body
     body = json.dumps(form_data)
     # Find correct backend url/key based on model
-    await get_all_models(request, user=user)
     model_id = form_data.get("model")
+    # Check if model is already in app state cache to avoid expensive get_all_models() call
     models = request.app.state.OPENAI_MODELS
+    if not models or model_id not in models:
+        await get_all_models(request, user=user)
+        models = request.app.state.OPENAI_MODELS
     if model_id in models:
         idx = models[model_id]["urlIdx"]
 
@@ -1291,12 +1193,9 @@ async def embeddings(request: Request, form_data: dict, user):
         if "text/event-stream" in r.headers.get("Content-Type", ""):
             streaming = True
             return StreamingResponse(
-                r.content,
+                stream_wrapper(r, session),
                 status_code=r.status,
                 headers=dict(r.headers),
-                background=BackgroundTask(
-                    cleanup_response, response=r, session=session
-                ),
             )
         else:
             try:
@@ -1324,6 +1223,129 @@ async def embeddings(request: Request, form_data: dict, user):
             await cleanup_response(r, session)
 
 
+class ResponsesForm(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    model: str
+    input: Optional[list | str] = None
+    instructions: Optional[str] = None
+    stream: Optional[bool] = None
+    temperature: Optional[float] = None
+    max_output_tokens: Optional[int] = None
+    top_p: Optional[float] = None
+    tools: Optional[list] = None
+    tool_choice: Optional[str | dict] = None
+    text: Optional[dict] = None
+    truncation: Optional[str] = None
+    metadata: Optional[dict] = None
+    store: Optional[bool] = None
+    reasoning: Optional[dict] = None
+    previous_response_id: Optional[str] = None
+
+
+@router.post("/responses")
+async def responses(
+    request: Request,
+    form_data: ResponsesForm,
+    user=Depends(get_verified_user),
+):
+    """
+    Forward requests to the OpenAI Responses API endpoint.
+    Routes to the correct upstream backend based on the model field.
+    """
+    payload = form_data.model_dump(exclude_none=True)
+    body = json.dumps(payload)
+
+    idx = 0
+    model_id = form_data.model
+    if model_id:
+        models = request.app.state.OPENAI_MODELS
+        if not models or model_id not in models:
+            await get_all_models(request, user=user)
+            models = request.app.state.OPENAI_MODELS
+        if model_id in models:
+            idx = models[model_id]["urlIdx"]
+
+    url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
+    key = request.app.state.config.OPENAI_API_KEYS[idx]
+    api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
+        str(idx),
+        request.app.state.config.OPENAI_API_CONFIGS.get(url, {}),  # Legacy support
+    )
+
+    r = None
+    session = None
+    streaming = False
+
+    try:
+        headers, cookies = await get_headers_and_cookies(
+            request, url, key, api_config, user=user
+        )
+
+        if api_config.get("azure", False):
+            api_version = api_config.get("api_version", "2023-03-15-preview")
+
+            auth_type = api_config.get("auth_type", "bearer")
+            if auth_type not in ("azure_ad", "microsoft_entra_id"):
+                headers["api-key"] = key
+
+            headers["api-version"] = api_version
+
+            model = payload.get("model", "")
+            request_url = (
+                f"{url}/openai/deployments/{model}/responses?api-version={api_version}"
+            )
+        else:
+            request_url = f"{url}/responses"
+
+        session = aiohttp.ClientSession(
+            trust_env=True,
+            timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT),
+        )
+        r = await session.request(
+            method="POST",
+            url=request_url,
+            data=body,
+            headers=headers,
+            cookies=cookies,
+            ssl=AIOHTTP_CLIENT_SESSION_SSL,
+        )
+
+        # Check if response is SSE
+        if "text/event-stream" in r.headers.get("Content-Type", ""):
+            streaming = True
+            return StreamingResponse(
+                stream_wrapper(r, session),
+                status_code=r.status,
+                headers=dict(r.headers),
+            )
+        else:
+            try:
+                response_data = await r.json()
+            except Exception:
+                response_data = await r.text()
+
+            if r.status >= 400:
+                if isinstance(response_data, (dict, list)):
+                    return JSONResponse(status_code=r.status, content=response_data)
+                else:
+                    return PlainTextResponse(
+                        status_code=r.status, content=response_data
+                    )
+
+            return response_data
+
+    except Exception as e:
+        log.exception(e)
+        raise HTTPException(
+            status_code=r.status if r else 500,
+            detail="Open WebUI: Server Connection Error",
+        )
+    finally:
+        if not streaming:
+            await cleanup_response(r, session)
+
+
 @router.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE"])
 async def proxy(path: str, request: Request, user=Depends(get_verified_user)):
     """
@@ -1332,7 +1354,24 @@ async def proxy(path: str, request: Request, user=Depends(get_verified_user)):
 
     body = await request.body()
 
+    # Parse JSON body to resolve model-based routing
+    payload = None
+    if body:
+        try:
+            payload = json.loads(body)
+        except (json.JSONDecodeError, ValueError):
+            payload = None
+
     idx = 0
+    model_id = payload.get("model") if isinstance(payload, dict) else None
+    if model_id:
+        models = request.app.state.OPENAI_MODELS
+        if not models or model_id not in models:
+            await get_all_models(request, user=user)
+            models = request.app.state.OPENAI_MODELS
+        if model_id in models:
+            idx = models[model_id]["urlIdx"]
+
     url = request.app.state.config.OPENAI_API_BASE_URLS[idx]
     key = request.app.state.config.OPENAI_API_KEYS[idx]
     api_config = request.app.state.config.OPENAI_API_CONFIGS.get(
@@ -1383,12 +1422,9 @@ async def proxy(path: str, request: Request, user=Depends(get_verified_user)):
         if "text/event-stream" in r.headers.get("Content-Type", ""):
             streaming = True
             return StreamingResponse(
-                r.content,
+                stream_wrapper(r, session),
                 status_code=r.status,
                 headers=dict(r.headers),
-                background=BackgroundTask(
-                    cleanup_response, response=r, session=session
-                ),
             )
         else:
             try:
