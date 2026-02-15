@@ -18,7 +18,7 @@ import json
 import logging
 import hashlib
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from urllib.parse import urljoin
 
@@ -150,7 +150,7 @@ class Filter:
                         'user_id': user_id,
                         'file_size': file_size,
                         'content_hash': content_hash,
-                        'timestamp': datetime.now().isoformat()
+                        'timestamp': datetime.now(timezone.utc).isoformat()
                     })
                     
                     log.info(f"DocumentMetadata created for file {file_id}")
@@ -183,7 +183,7 @@ class Filter:
                     self._publish_event('document.deleted', {
                         'file_id': file_id,
                         'user_id': user_id,
-                        'timestamp': datetime.now().isoformat()
+                        'timestamp': datetime.now(timezone.utc).isoformat()
                     })
                     
                     log.info(f"DocumentMetadata deleted for file {file_id}")
@@ -199,7 +199,7 @@ class Filter:
                     self._publish_event('document.updated', {
                         'file_id': file_id,
                         'user_id': user_id,
-                        'timestamp': datetime.now().isoformat()
+                        'timestamp': datetime.now(timezone.utc).isoformat()
                     })
                     
                     log.info(f"DocumentMetadata marked for reprocessing: {file_id}")
@@ -412,7 +412,7 @@ class Filter:
             event_payload = {
                 'type': event_type,
                 'data': event_data,
-                'timestamp': datetime.now().isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'source': 'open-webui-filter'
             }
             
