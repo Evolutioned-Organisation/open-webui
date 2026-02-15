@@ -3431,6 +3431,19 @@ async def streaming_chat_response_handler(response, ctx):
 
                                     delta = choices[0].get("delta", {})
 
+                                    # Forward delta.status to frontend (e.g. AIMbient RAG workflow progress)
+                                    delta_status = delta.get("status")
+                                    if delta_status is not None:
+                                        await event_emitter(
+                                            {
+                                                "type": "status",
+                                                "data": {
+                                                    "description": str(delta_status),
+                                                    "done": False,
+                                                },
+                                            }
+                                        )
+
                                     # Handle delta annotations
                                     annotations = delta.get("annotations")
                                     if annotations:
