@@ -13,6 +13,34 @@ from open_webui.config import DEFAULT_RAG_TEMPLATE
 log = logging.getLogger(__name__)
 
 
+def _guard_text(value: str, source: str) -> str:
+    """Best-effort LLM Guard scan with lightweight fallback escaping."""
+    text = value or ""
+    try:
+        from llm_guard.input_scanners import PromptInjection  # type: ignore
+
+        scanner = PromptInjection()
+        result = scanner.scan(text)
+        if isinstance(result, tuple) and result:
+            candidate = result[0]
+            if isinstance(candidate, str):
+                text = candidate
+        elif isinstance(result, str):
+            text = result
+    except Exception:
+        # Fallback: neutralise context/query tags that can break prompt boundaries.
+        text = (
+            text.replace("<context>", "&lt;context&gt;")
+            .replace("</context>", "&lt;/context&gt;")
+            .replace("<query>", "&lt;query&gt;")
+            .replace("</query>", "&lt;/query&gt;")
+        )
+
+    if text != value:
+        log.debug("Prompt guard modified %s payload", source)
+    return text
+
+
 def get_task_model_id(
     default_model_id: str, task_model: str, task_model_external: str, models
 ) -> str:
@@ -216,11 +244,14 @@ def rag_template(template: str, context: str, query: str):
         template = template.replace("{{QUERY}}", query_placeholder)
         query_placeholders.append((query_placeholder, "{{QUERY}}"))
 
-    template = template.replace("[context]", context)
-    template = template.replace("{{CONTEXT}}", context)
+    guarded_context = _guard_text(context, "context")
+    guarded_query = _guard_text(query, "query")
 
-    template = template.replace("[query]", query)
-    template = template.replace("{{QUERY}}", query)
+    template = template.replace("[context]", guarded_context)
+    template = template.replace("{{CONTEXT}}", guarded_context)
+
+    template = template.replace("[query]", guarded_query)
+    template = template.replace("{{QUERY}}", guarded_query)
 
     for query_placeholder, original_placeholder in query_placeholders:
         template = template.replace(query_placeholder, original_placeholder)

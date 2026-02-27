@@ -39,6 +39,8 @@ class ExternalDocumentLoader(BaseLoader):
         if self.api_key is not None:
             headers["Authorization"] = f"Bearer {self.api_key}"
 
+        headers["X-Origin"] = "webui"
+
         try:
             headers["X-Filename"] = quote(os.path.basename(self.file_path))
         except:

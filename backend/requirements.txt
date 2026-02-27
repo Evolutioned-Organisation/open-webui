@@ -41,7 +41,6 @@ asgiref==3.11.1
 # AI libraries
 tiktoken
 mcp==1.26.0
-
 openai
 anthropic
 google-genai==1.62.0

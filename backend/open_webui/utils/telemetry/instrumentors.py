@@ -188,7 +188,8 @@ class Instrumentor(BaseInstrumentor):
 
     def _instrument(self, **kwargs):
         instrument_fastapi(app=self.app)
-        SQLAlchemyInstrumentor().instrument(engine=self.db_engine)
+        # SQLAlchemy disabled: creates noisy spans for every SQLite connect/SELECT
+        # SQLAlchemyInstrumentor().instrument(engine=self.db_engine)
         RedisInstrumentor().instrument(request_hook=redis_request_hook)
         RequestsInstrumentor().instrument(
             request_hook=requests_hook, response_hook=response_hook

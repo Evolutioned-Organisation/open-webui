@@ -38,15 +38,17 @@ def setup(app: FastAPI, db_engine: Engine):
             auth_header = b64encode(auth_string.encode()).decode()
             headers = [("authorization", f"Basic {auth_header}")]
 
-        # otlp export
+        # When passing endpoint explicitly the SDK uses it as-is (no auto-append).
+        # HTTP exporter needs the full traces path; gRPC uses the base endpoint.
+        endpoint_base = (OTEL_EXPORTER_OTLP_ENDPOINT or "").rstrip("/")
         if OTEL_OTLP_SPAN_EXPORTER == "http":
             exporter = HttpOTLPSpanExporter(
-                endpoint=OTEL_EXPORTER_OTLP_ENDPOINT,
+                endpoint=f"{endpoint_base}/v1/traces",
                 headers=headers,
             )
         else:
             exporter = OTLPSpanExporter(
-                endpoint=OTEL_EXPORTER_OTLP_ENDPOINT,
+                endpoint=endpoint_base,
                 insecure=OTEL_EXPORTER_OTLP_INSECURE,
                 headers=headers,
             )

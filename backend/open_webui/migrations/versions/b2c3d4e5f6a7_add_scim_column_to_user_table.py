@@ -19,7 +19,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column("user", sa.Column("scim", sa.JSON(), nullable=True))
+    # Check if column already exists before adding (idempotent migration)
+    conn = op.get_bind()
+    columns = [col["name"] for col in conn.execute(sa.text("PRAGMA table_info('user')")).mappings()]
+    if "scim" not in columns:
+        op.add_column("user", sa.Column("scim", sa.JSON(), nullable=True))
 
 
 def downgrade() -> None:
