@@ -29,9 +29,11 @@ def setup_logging():
         headers = [("authorization", f"Basic {auth_header}")]
     resource = Resource.create(attributes={SERVICE_NAME: OTEL_SERVICE_NAME})
 
+    # HTTP exporter must use full path: collector expects POST .../v1/logs (see Open-WebUI-Grafana-LGTM-OTEL.md).
+    endpoint_base = (OTEL_LOGS_EXPORTER_OTLP_ENDPOINT or "").rstrip("/")
     if OTEL_LOGS_OTLP_SPAN_EXPORTER == "http":
         exporter = HttpOTLPLogExporter(
-            endpoint=OTEL_LOGS_EXPORTER_OTLP_ENDPOINT,
+            endpoint=f"{endpoint_base}/v1/logs",
             headers=headers,
         )
     else:
