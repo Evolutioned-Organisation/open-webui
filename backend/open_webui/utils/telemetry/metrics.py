@@ -60,12 +60,15 @@ def _build_meter_provider(resource: Resource) -> MeterProvider:
         auth_header = b64encode(auth_string.encode()).decode()
         headers = [("authorization", f"Basic {auth_header}")]
 
-    # Periodic reader pushes metrics over OTLP/gRPC to collector
+    # Periodic reader pushes metrics over OTLP to collector.
+    # HTTP exporter must use the full path: collector expects POST .../v1/metrics.
+    endpoint_base = (OTEL_METRICS_EXPORTER_OTLP_ENDPOINT or "").rstrip("/")
     if OTEL_METRICS_OTLP_SPAN_EXPORTER == "http":
         readers: List[PeriodicExportingMetricReader] = [
             PeriodicExportingMetricReader(
                 OTLPHttpMetricExporter(
-                    endpoint=OTEL_METRICS_EXPORTER_OTLP_ENDPOINT, headers=headers
+                    endpoint=f"{endpoint_base}/v1/metrics",
+                    headers=headers,
                 ),
                 export_interval_millis=_EXPORT_INTERVAL_MILLIS,
             )
