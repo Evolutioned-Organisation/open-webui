@@ -551,6 +551,35 @@ export function sanitizeDisplayContent(content: any): string {
 }
 
 /**
+ * Sanitise Mermaid node labels that commonly break parser rules when left unquoted.
+ * This keeps the diagram structure intact while normalising HTML-like fragments.
+ */
+export function sanitizeMermaidDiagramCode(code: string): string {
+	if (!code || typeof code !== 'string') return code;
+
+	return code.replace(/\[([^\[\]\n]*)\]/g, (_match, rawLabel: string) => {
+		const label = rawLabel.trim();
+		if (!label) return '[]';
+
+		if (
+			(label.startsWith('"') && label.endsWith('"')) ||
+			(label.startsWith("'") && label.endsWith("'"))
+		) {
+			return `[${label}]`;
+		}
+
+		const cleanedLabel = label
+			.replace(/<br\s*\/?>/gi, ' ')
+			.replace(/<[^>]*>/g, ' ')
+			.replace(/\s+/g, ' ')
+			.replace(/"/g, "'")
+			.trim();
+
+		return `["${cleanedLabel}"]`;
+	});
+}
+
+/**
  * Create safe error message
  */
 export function createSafeErrorMessage(error: any): string {

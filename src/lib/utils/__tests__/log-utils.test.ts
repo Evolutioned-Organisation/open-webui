@@ -26,6 +26,7 @@ import {
 	validateFilePath,
 	sanitizeUrlParameter,
 	sanitizeDisplayContent,
+	sanitizeMermaidDiagramCode,
 	createSafeErrorMessage,
 	type LogEntry,
 	type WorkflowSummary
@@ -350,6 +351,21 @@ describe('log-utils', () => {
 				);
 				expect(createSafeErrorMessage(null)).toBe('An unknown error occurred');
 			});
+		});
+	});
+
+	describe('sanitizeMermaidDiagramCode', () => {
+		it('should quote node labels with html-like breaks', () => {
+			const code = 'graph TD\nA[Policy Note<br>Default (operator)] --> B[Done]';
+			const result = sanitizeMermaidDiagramCode(code);
+			expect(result).toContain('A["Policy Note Default (operator)"]');
+			expect(result).toContain('B["Done"]');
+		});
+
+		it('should preserve already-quoted node labels', () => {
+			const code = 'graph LR\nA["Already safe"] --> B["Another label"]';
+			const result = sanitizeMermaidDiagramCode(code);
+			expect(result).toBe(code);
 		});
 	});
 });
