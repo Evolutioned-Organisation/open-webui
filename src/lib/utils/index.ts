@@ -21,6 +21,7 @@ import { marked } from 'marked';
 import markedExtension from '$lib/utils/marked/extension';
 import markedKatexExtension from '$lib/utils/marked/katex-extension';
 import hljs from 'highlight.js';
+import { sanitizeMermaidDiagramCode } from '$lib/utils/log-utils';
 
 //////////////////////////
 // Helper functions
@@ -1615,9 +1616,10 @@ export const initMermaid = async () => {
 };
 
 export const renderMermaidDiagram = async (mermaid, code: string) => {
-	const parseResult = await mermaid.parse(code, { suppressErrors: false });
+	const sanitizedCode = sanitizeMermaidDiagramCode(code);
+	const parseResult = await mermaid.parse(sanitizedCode, { suppressErrors: false });
 	if (parseResult) {
-		const { svg } = await mermaid.render(`mermaid-${uuidv4()}`, code);
+		const { svg } = await mermaid.render(`mermaid-${uuidv4()}`, sanitizedCode);
 		return svg;
 	}
 	return '';
