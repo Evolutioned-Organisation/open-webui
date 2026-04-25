@@ -171,9 +171,6 @@
 			return;
 		}
 		const id = AIMBIENT_END_USER_WORKFLOW_MODEL_ID;
-		if (!$models.some((m) => m.id === id)) {
-			return;
-		}
 		if (selectedModels.length !== 1 || selectedModels[0] !== id) {
 			selectedModels = [id];
 		}
@@ -183,7 +180,7 @@
 	};
 
 	// Re-run when folder/session/init paths touch `selectedModels` or `atSelectedModel` for `user` role.
-	$: if ($user?.role === 'user' && $models?.length) {
+	$: if ($user?.role === 'user') {
 		void selectedModels;
 		void atSelectedModel;
 		enforceAimbientEndUserWorkflowModel();
