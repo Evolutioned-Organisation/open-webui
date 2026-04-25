@@ -1519,7 +1519,22 @@
 				message.content += choices[0]?.message?.content;
 			} else {
 				// Stream response
-				let value = choices[0]?.delta?.content ?? '';
+				const delta = choices[0]?.delta ?? {};
+				const pipelineStatus = delta?.status;
+				if (pipelineStatus) {
+					const statusEntry = {
+						action: 'pipeline_execution',
+						description: pipelineStatus,
+						done: false
+					};
+					if (message?.statusHistory) {
+						message.statusHistory.push(statusEntry);
+					} else {
+						message.statusHistory = [statusEntry];
+					}
+				}
+
+				let value = delta?.content ?? '';
 				if (message.content == '' && value == '\n') {
 					console.log('Empty response');
 				} else {
@@ -1599,6 +1614,9 @@
 		history.messages[message.id] = message;
 
 		if (done) {
+			if (message?.statusHistory?.length) {
+				message.statusHistory[message.statusHistory.length - 1].done = true;
+			}
 			message.done = true;
 
 			if ($settings.responseAutoCopy) {

@@ -3370,6 +3370,7 @@ async def streaming_chat_response_handler(response, ctx):
                     nonlocal output
 
                     response_tool_calls = []
+                    last_pipeline_status = None
 
                     delta_count = 0
                     delta_chunk_size = max(
@@ -3504,6 +3505,21 @@ async def streaming_chat_response_handler(response, ctx):
                                         continue
 
                                     delta = choices[0].get("delta", {})
+                                    pipeline_status = delta.get("status")
+
+                                    if pipeline_status:
+                                        if pipeline_status != last_pipeline_status:
+                                            await event_emitter(
+                                                {
+                                                    "type": "status",
+                                                    "data": {
+                                                        "action": "pipeline_execution",
+                                                        "description": pipeline_status,
+                                                        "done": False,
+                                                    },
+                                                }
+                                            )
+                                            last_pipeline_status = pipeline_status
 
                                     # Handle delta annotations
                                     annotations = delta.get("annotations")
@@ -3914,6 +3930,18 @@ async def streaming_chat_response_handler(response, ctx):
                                 log.debug(f"Error: {e}")
                                 continue
                     await flush_pending_delta_data()
+
+                    if last_pipeline_status:
+                        await event_emitter(
+                            {
+                                "type": "status",
+                                "data": {
+                                    "action": "pipeline_execution",
+                                    "description": last_pipeline_status,
+                                    "done": True,
+                                },
+                            }
+                        )
 
                     if output:
                         # Clean up the last message item
