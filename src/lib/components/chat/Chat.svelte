@@ -163,6 +163,32 @@
 	// Message queue for storing messages while generating
 	let messageQueue: { id: string; prompt: string; files: any[] }[] = [];
 
+	// AIMbient #1000: end users (role `user`) may only select this pipeline in the OWUI chat UI.
+	const AIMBIENT_END_USER_WORKFLOW_MODEL_ID = 'DecomposedRagSearch_pipeline';
+
+	const enforceAimbientEndUserWorkflowModel = () => {
+		if ($user?.role !== 'user') {
+			return;
+		}
+		const id = AIMBIENT_END_USER_WORKFLOW_MODEL_ID;
+		if (!$models.some((m) => m.id === id)) {
+			return;
+		}
+		if (selectedModels.length !== 1 || selectedModels[0] !== id) {
+			selectedModels = [id];
+		}
+		if (atSelectedModel !== undefined && atSelectedModel.id !== id) {
+			atSelectedModel = undefined;
+		}
+	};
+
+	// Re-run when folder/session/init paths touch `selectedModels` or `atSelectedModel` for `user` role.
+	$: if ($user?.role === 'user' && $models?.length) {
+		void selectedModels;
+		void atSelectedModel;
+		enforceAimbientEndUserWorkflowModel();
+	}
+
 	$: if (chatIdProp) {
 		navigateHandler();
 	}
@@ -1100,6 +1126,8 @@
 			$models.map((m) => m.id).includes(modelId) ? modelId : ''
 		);
 
+		enforceAimbientEndUserWorkflowModel();
+
 		const chatInput = document.getElementById('chat-input');
 		setTimeout(() => chatInput?.focus(), 0);
 	};
@@ -1134,6 +1162,8 @@
 				if (!($user?.role === 'admin' || ($user?.permissions?.chat?.multiple_models ?? true))) {
 					selectedModels = selectedModels.length > 0 ? [selectedModels[0]] : [''];
 				}
+
+				enforceAimbientEndUserWorkflowModel();
 
 				oldSelectedModelIds = JSON.parse(JSON.stringify(selectedModels));
 
@@ -1619,6 +1649,8 @@
 		if (JSON.stringify(selectedModels) !== JSON.stringify(_selectedModels)) {
 			selectedModels = _selectedModels;
 		}
+
+		enforceAimbientEndUserWorkflowModel();
 
 		if (userPrompt === '' && files.length === 0) {
 			toast.error($i18n.t('Please enter a prompt'));
@@ -2573,6 +2605,7 @@
 						{history}
 						title={$chatTitle}
 						bind:selectedModels
+						showModelSelector={$user?.role === 'admin'}
 						shareEnabled={!!history.currentId}
 						{initNewChat}
 						archiveChatHandler={() => {}}
