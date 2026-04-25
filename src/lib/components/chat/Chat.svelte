@@ -163,14 +163,37 @@
 	// Message queue for storing messages while generating
 	let messageQueue: { id: string; prompt: string; files: any[] }[] = [];
 
-	// AIMbient #1000: end users (role `user`) may only select this pipeline in the OWUI chat UI.
-	const AIMBIENT_END_USER_WORKFLOW_MODEL_ID = 'DecomposedRagSearch_pipeline';
+	// AIMbient #1000: end users (role `user`) may only select the Decomposed workflow in OWUI chat.
+	const AIMBIENT_END_USER_WORKFLOW_MODEL_ID_CANDIDATES = [
+		'DecomposedRagSearch_pipeline',
+		'DecomposedRagSearch'
+	];
+
+	const resolveAimbientEndUserWorkflowModelId = () => {
+		const availableModelIds = ($models ?? []).map((m) => m.id);
+
+		for (const modelId of AIMBIENT_END_USER_WORKFLOW_MODEL_ID_CANDIDATES) {
+			if (availableModelIds.includes(modelId)) {
+				return modelId;
+			}
+		}
+
+		const decomposedPrefixMatch = availableModelIds.find((modelId) =>
+			modelId.toLowerCase().startsWith('decomposedragsearch')
+		);
+		return decomposedPrefixMatch ?? null;
+	};
 
 	const enforceAimbientEndUserWorkflowModel = () => {
 		if ($user?.role !== 'user') {
 			return;
 		}
-		const id = AIMBIENT_END_USER_WORKFLOW_MODEL_ID;
+
+		const id = resolveAimbientEndUserWorkflowModelId();
+		if (!id) {
+			return;
+		}
+
 		if (selectedModels.length !== 1 || selectedModels[0] !== id) {
 			selectedModels = [id];
 		}
@@ -180,7 +203,7 @@
 	};
 
 	// Re-run when folder/session/init paths touch `selectedModels` or `atSelectedModel` for `user` role.
-	$: if ($user?.role === 'user') {
+	$: if ($user?.role === 'user' && $models?.length) {
 		void selectedModels;
 		void atSelectedModel;
 		enforceAimbientEndUserWorkflowModel();
