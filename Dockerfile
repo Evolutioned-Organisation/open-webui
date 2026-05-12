@@ -26,7 +26,7 @@ ARG GID=0
 ######## WebUI frontend ########
 FROM --platform=$BUILDPLATFORM node:22-alpine3.20 AS build
 ARG BUILD_HASH
-ARG NODE_OPTIONS=--max-old-space-size=4096
+ARG NODE_OPTIONS=--max-old-space-size=6144
 
 # Keep Vite build within CI runner memory limits.
 ENV NODE_OPTIONS=${NODE_OPTIONS}
